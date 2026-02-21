@@ -46,6 +46,7 @@ https://www.online-utility.org/image/convert/to/XBM
 
 #include "settings.h"
 #include "CommandLine.h"
+#include "AutoCycle.h"
 #include "lang_var.h"
 
 #ifdef HAS_BATTERY
@@ -83,6 +84,7 @@ EvilPortal evil_portal_obj;
 Buffer buffer_obj;
 Settings settings_obj;
 CommandLine cli_obj;
+AutoCycle auto_cycle_obj;
 
 #ifdef HAS_GPS
   GpsInterface gps_obj;
@@ -370,6 +372,7 @@ void loop()
     display_obj.main(wifi_scan_obj.currentScanMode);
   #endif
   wifi_scan_obj.main(currentTime);
+  auto_cycle_obj.main(currentTime);
 
   #ifdef HAS_GPS
     gps_obj.main();

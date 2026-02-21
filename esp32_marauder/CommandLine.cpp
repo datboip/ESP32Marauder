@@ -282,6 +282,11 @@ void CommandLine::runCommand(String input) {
       #endif
       Serial.println(HELP_BT_SKIM_CMD);
     #endif
+    Serial.println(HELP_AUTOCYCLE_CMD);
+    #ifdef HAS_SD
+      Serial.println(HELP_LISTFILES_CMD);
+      Serial.println(HELP_READFILE_CMD);
+    #endif
     Serial.println(HELP_FOOT);
     return;
   }
@@ -308,6 +313,11 @@ void CommandLine::runCommand(String input) {
     }
 
     wifi_scan_obj.StartScan(WIFI_SCAN_OFF);
+
+    // Stop auto-cycle if running
+    if (auto_cycle_obj.isRunning()) {
+      auto_cycle_obj.stop();
+    }
 
     if(old_scan_mode == WIFI_SCAN_GPS_NMEA)
       Serial.println(F("END OF NMEA STREAM"));
@@ -1352,6 +1362,89 @@ void CommandLine::runCommand(String input) {
         wifi_scan_obj.StartScan(BT_SCAN_SKIMMERS, TFT_MAGENTA);
       #else
         Serial.println(F("Bluetooth not supported"));
+      #endif
+    }
+
+    // AutoCycle command
+    else if (cmd_args.get(0) == AUTOCYCLE_CMD) {
+      int s_arg = this->argSearch(&cmd_args, "-s");
+      int t_arg = this->argSearch(&cmd_args, "-t");
+      int p_arg = this->argSearch(&cmd_args, "-p");
+
+      if (s_arg != -1) {
+        String action = cmd_args.get(s_arg + 1);
+        if (action == "start") {
+          auto_cycle_obj.start();
+        } else if (action == "stop") {
+          auto_cycle_obj.stop();
+        } else if (action == "status") {
+          auto_cycle_obj.printStatus();
+        } else {
+          Serial.println(F("Usage: autocycle -s start/stop/status"));
+        }
+      } else if (t_arg != -1) {
+        // Set mode duration: autocycle -t <index> <seconds>
+        if (this->checkValueExists(&cmd_args, t_arg + 2)) {
+          uint8_t idx = cmd_args.get(t_arg + 1).toInt();
+          uint16_t sec = cmd_args.get(t_arg + 2).toInt();
+          auto_cycle_obj.setModeDuration(idx, sec);
+          Serial.print(F("Mode "));
+          Serial.print(idx);
+          Serial.print(F(" set to "));
+          Serial.print(sec);
+          Serial.println(F("s"));
+        }
+      } else if (p_arg != -1) {
+        // Set pause duration: autocycle -p <seconds>
+        uint16_t sec = cmd_args.get(p_arg + 1).toInt();
+        auto_cycle_obj.setPauseDuration(sec);
+        Serial.print(F("Pause set to "));
+        Serial.print(sec);
+        Serial.println(F("s"));
+      } else {
+        auto_cycle_obj.printStatus();
+      }
+    }
+
+    // List SD card files
+    else if (cmd_args.get(0) == LISTFILES_CMD) {
+      #ifdef HAS_SD
+        String dir = "/";
+        if (cmd_args.size() > 1) dir = cmd_args.get(1);
+        Serial.print(F("[listfiles] "));
+        Serial.println(dir);
+        sd_obj.listDir(dir);
+        Serial.println(F("[/listfiles]"));
+      #else
+        Serial.println(F("SD card not supported"));
+      #endif
+    }
+
+    // Read file from SD card
+    else if (cmd_args.get(0) == READFILE_CMD) {
+      #ifdef HAS_SD
+        if (cmd_args.size() > 1) {
+          String path = cmd_args.get(1);
+          Serial.print(F("[readfile] "));
+          Serial.println(path);
+          File f = sd_obj.getFile(path);
+          if (f) {
+            char buf[256];
+            while (f.available()) {
+              int len = f.read((uint8_t*)buf, sizeof(buf));
+              if (len > 0) Serial.write((uint8_t*)buf, len);
+            }
+            f.close();
+            Serial.println();
+            Serial.println(F("[/readfile]"));
+          } else {
+            Serial.println(F("File not found"));
+          }
+        } else {
+          Serial.println(F("Usage: readfile <filepath>"));
+        }
+      #else
+        Serial.println(F("SD card not supported"));
       #endif
     }
 

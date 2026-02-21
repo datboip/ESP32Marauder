@@ -11,6 +11,7 @@
 #endif 
 
 #include "WiFiScan.h"
+#include "AutoCycle.h"
 //#include "Web.h"
 #ifdef HAS_SD
   #include "SDInterface.h"
@@ -24,6 +25,7 @@
 #endif
 
 extern WiFiScan wifi_scan_obj;
+extern AutoCycle auto_cycle_obj;
 //extern Web web_obj;
 #ifdef HAS_SD
   extern SDInterface sd_obj;
@@ -116,6 +118,11 @@ const char PROGMEM BT_SPOOFAT_CMD[] = "spoofat";
 const char PROGMEM BT_WARDRIVE_CMD[] = "btwardrive";
 const char PROGMEM BT_SKIM_CMD[] = "sniffskim";
 
+// AutoCycle + SD file access
+const char PROGMEM AUTOCYCLE_CMD[] = "autocycle";
+const char PROGMEM LISTFILES_CMD[] = "listfiles";
+const char PROGMEM READFILE_CMD[] = "readfile";
+
 
 //// Command help messages
 // Admin
@@ -190,6 +197,11 @@ const char PROGMEM HELP_BT_SPOOFAT_CMD[] = "spoofat -t <index>";
 //onst char PROGMEM HELP_BT_SPAM_ALL_CMD[] = "btspamall";
 const char PROGMEM HELP_BT_WARDRIVE_CMD[] = "btwardrive";
 const char PROGMEM HELP_BT_SKIM_CMD[] = "sniffskim";
+
+// AutoCycle + SD
+const char PROGMEM HELP_AUTOCYCLE_CMD[] = "autocycle [-s start/stop/status] [-t <mode_index> <seconds>] [-p <pause_seconds>]";
+const char PROGMEM HELP_LISTFILES_CMD[] = "listfiles [directory]";
+const char PROGMEM HELP_READFILE_CMD[] = "readfile <filepath>";
 const char PROGMEM HELP_FOOT[] = "==================================";
 
 
