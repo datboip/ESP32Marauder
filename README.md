@@ -28,7 +28,8 @@ Custom fork of ESP32 Marauder for the V6.1 (LOLIN D32 + ILI9341 touchscreen) wit
 ### What's Different
 
 **Cyberpunk Boot Splash**
-- Animated boot sequence with border draw-in, typewriter title, magenta underline, circuit trace details, and accent lines
+- Animated boot sequence with border draw-in, typewriter title, magenta underline, circuit traces, and accent lines
+- Made for shits and giggles
 - Credits JustCallMeKoko as original author
 
 **AutoCycle Mode**
@@ -44,14 +45,19 @@ Custom fork of ESP32 Marauder for the V6.1 (LOLIN D32 + ILI9341 touchscreen) wit
 - Hold top or bottom touch zone for 1.5s to enter brightness mode
 - Also in Device > Brightness menu and CLI: `brightness -c` / `brightness -s 0-3`
 
+**Boot Shortcuts**
+- 4 corner buttons on splash screen: Wardrive, AutoCycle, Station Wardrive, BLE Scan
+- Tap any corner during the 4-second boot splash to jump straight into that mode
+- Just power on and go, no menu navigation needed
+
 **Big Touch Zones**
 - 25% / 50% / 25% layout (Up / Select / Down) instead of equal thirds
-- Larger top and bottom zones for easier navigation
+- Bigger top and bottom zones so it's easier to hit while driving
 
-**Bug Fixes**
-- Fixed Buffer crash (null `fs` pointer in `setPathPrefix`)
-- Fixed headless mode false trigger on V6/V6.1 (GPIO0 held low by USB reset)
-- Fixed backlight init order (PWM after display init)
+**Fixes for V6.1**
+- Buffer crash when AutoCycle started without SD card (null pointer)
+- Headless mode triggering on every boot (GPIO0 held low by USB reset on V6/V6.1)
+- Backlight not working after flash (PWM init before display init)
 
 ### Building
 

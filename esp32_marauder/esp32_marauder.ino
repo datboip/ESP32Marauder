@@ -138,167 +138,171 @@ uint32_t currentTime  = 0;
 #endif
 
 // ============================================================
-// CYBERPUNK BOOT SPLASH — matches marauder_preview.html style
+// CYBERPUNK BOOT SPLASH — 4 corner quick-launch buttons
 // ============================================================
 #ifdef HAS_SCREEN
-void drawCyberpunkSplash() {
+
+// Boot shortcut mode table
+struct BootMode {
+  const char* label;
+  uint8_t scanMode;
+  uint16_t color;
+};
+
+const BootMode BOOT_MODES[] = {
+  {"WARDRIVE",  32, 0x07E0},  // WIFI_SCAN_WAR_DRIVE, green
+  {"AUTOCYCLE",  0, 0xF81F},  // special handle, magenta
+  {"STATION",   33, 0xFDA0},  // WIFI_SCAN_STATION_WAR_DRIVE, orange
+  {"BLE SCAN",  10, 0x001F},  // BT_SCAN_ALL, blue
+};
+
+// Returns: 0=normal, 1-4=boot mode index
+uint8_t drawCyberpunkSplash() {
   TFT_eSPI& tft = display_obj.tft;
   const uint16_t W = TFT_WIDTH;   // 240
   const uint16_t H = TFT_HEIGHT;  // 320
   const uint16_t cx = W / 2;
+  const uint16_t cy = H / 2;      // 160
 
   // Colors
   const uint16_t CYAN    = 0x07FF;
   const uint16_t MAGENTA = 0xF81F;
   const uint16_t DKCYAN  = 0x0410;
-  const uint16_t DIMCYAN = 0x0208;
   const uint16_t DIMGRAY = 0x39E7;
 
   tft.fillScreen(TFT_BLACK);
-
-  // Turn backlight on so the animation is visible!
   backlightOn();
 
-  // === Phase 1: Static accent lines (top & bottom, avoid corners/traces) ===
-  // Top lines: y 40-100, x constrained to middle 60% to avoid corner traces
-  for (int g = 0; g < 3; g++) {
-    int gy = 40 + g * 22;
-    int gw = 15 + random(0, 30);
-    int gx = 50 + random(0, W - 100 - gw);  // center area only
-    tft.fillRect(gx, gy, gw, 1, (g % 2 == 0) ? CYAN : MAGENTA);
-  }
-  // Bottom lines: y 245-290, same center constraint
-  for (int g = 0; g < 3; g++) {
-    int gy = 245 + g * 18;
-    int gw = 15 + random(0, 30);
-    int gx = 50 + random(0, W - 100 - gw);
-    tft.fillRect(gx, gy, gw, 1, (g % 2 == 0) ? MAGENTA : CYAN);
-  }
-  delay(120);
+  // === Layout ===
+  // Buttons: 100x50 in each corner, with 4px margin from border
+  const int m = 4;       // outer margin
+  const int btnW = 104;
+  const int btnH = 55;
+  const int gap = 6;     // gap between buttons and center
 
-  // === Phase 2: Border draws in from corners ===
-  const int m = 8; // margin
-  const int bw = W - m * 2;
-  const int bh = H - m * 2;
-  for (int step = 0; step <= 20; step++) {
-    float prog = step / 20.0;
-    int topLen = bw * prog;
-    int sideLen = bh * prog;
-    // Top edge left to right
-    tft.drawFastHLine(m, m, topLen, CYAN);
-    // Bottom edge right to left
-    tft.drawFastHLine(W - m - topLen, H - m, topLen, CYAN);
-    // Left edge top to bottom
-    tft.drawFastVLine(m, m, sideLen, CYAN);
-    // Right edge bottom to top
-    tft.drawFastVLine(W - m - 1, H - m - sideLen, sideLen, CYAN);
-    delay(15);
+  // Button positions (x, y for each corner)
+  const uint16_t bx[4] = {
+    (uint16_t)(m + 2),                    // top-left
+    (uint16_t)(W - m - 2 - btnW),         // top-right
+    (uint16_t)(m + 2),                    // bottom-left
+    (uint16_t)(W - m - 2 - btnW)          // bottom-right
+  };
+  const uint16_t by[4] = {
+    (uint16_t)(m + 2),                    // top-left
+    (uint16_t)(m + 2),                    // top-right
+    (uint16_t)(H - m - 2 - btnH - 8),    // bottom-left (room for timeout bar)
+    (uint16_t)(H - m - 2 - btnH - 8)     // bottom-right
+  };
+
+  // Center area for branding: between buttons
+  const uint16_t centerTop = by[0] + btnH + gap;
+  const uint16_t centerBot = by[2] - gap;
+  const uint16_t centerMid = (centerTop + centerBot) / 2;
+
+  // === Phase 1: Border animation ===
+  for (int step = 0; step <= 15; step++) {
+    float prog = step / 15.0;
+    int hLen = (W - m * 2) * prog;
+    int vLen = (H - m * 2) * prog;
+    tft.drawFastHLine(m, m, hLen, DKCYAN);
+    tft.drawFastHLine(W - m - hLen, H - m, hLen, DKCYAN);
+    tft.drawFastVLine(m, m, vLen, DKCYAN);
+    tft.drawFastVLine(W - m - 1, H - m - vLen, vLen, DKCYAN);
+    delay(10);
   }
-  delay(60);
+  delay(40);
 
-  // === Phase 3: Corner chevrons in magenta ===
-  const int cs = 18;
-  // Top-left
-  tft.drawFastHLine(m, m, cs, MAGENTA);
-  tft.drawFastVLine(m, m, cs, MAGENTA);
-  // Top-right
-  tft.drawFastHLine(W - m - cs, m, cs, MAGENTA);
-  tft.drawFastVLine(W - m - 1, m, cs, MAGENTA);
-  // Bottom-left
-  tft.drawFastHLine(m, H - m - 1, cs, MAGENTA);
-  tft.drawFastVLine(m, H - m - cs, cs, MAGENTA);
-  // Bottom-right
-  tft.drawFastHLine(W - m - cs, H - m - 1, cs, MAGENTA);
-  tft.drawFastVLine(W - m - 1, H - m - cs, cs, MAGENTA);
-  delay(80);
+  // === Phase 2: Draw 4 buttons ===
+  for (int i = 0; i < 4; i++) {
+    uint16_t color = BOOT_MODES[i].color;
+    tft.drawRect(bx[i], by[i], btnW, btnH, color);
+    tft.setTextColor(color, TFT_BLACK);
+    tft.drawCentreString(BOOT_MODES[i].label, bx[i] + btnW / 2, by[i] + btnH / 2 - 7, 2);
+    delay(60);
+  }
+  delay(40);
 
-  // === Phase 4: Title — "M A R A U D E R" typewriter ===
-  const uint16_t titleY = 125;
+  // === Phase 3: Center branding ===
+  // Title typewriter
+  const uint16_t titleY = centerMid - 30;
   const char* letters = "MARAUDER";
-  const int numChars = 8;
-
   tft.setTextColor(CYAN, TFT_BLACK);
-  // Build up the spaced string one letter at a time (typewriter)
-  char spaced[24]; // "M A R A U D E R" = 15 chars + null
-  for (int i = 0; i < numChars; i++) {
-    // Build string so far with spaces between letters
+  char spaced[24];
+  for (int i = 0; i < 8; i++) {
     int pos = 0;
     for (int j = 0; j <= i; j++) {
       if (j > 0) spaced[pos++] = ' ';
       spaced[pos++] = letters[j];
     }
     spaced[pos] = '\0';
-    // Clear title area (inside border margins only)
-    tft.fillRect(m + 2, titleY, W - (m + 2) * 2, 20, TFT_BLACK);
+    tft.fillRect(btnW + gap + 2, titleY, W - (btnW + gap + 2) * 2, 18, TFT_BLACK);
     tft.drawCentreString(spaced, cx, titleY, 2);
-    delay(55);
+    delay(45);
   }
-  delay(80);
 
-  // === Phase 5: Magenta underline sweeps out from center ===
-  const uint16_t underY = titleY + 22;
-  const int underMaxW = 160;
-  for (int step = 0; step <= 15; step++) {
-    int hw = (underMaxW / 2) * step / 15;
-    tft.drawFastHLine(cx - hw, underY, hw * 2, MAGENTA);
-    delay(12);
+  // Underline
+  for (int step = 0; step <= 10; step++) {
+    int hw = 50 * step / 10;
+    tft.drawFastHLine(cx - hw, titleY + 20, hw * 2, MAGENTA);
+    delay(8);
   }
-  delay(80);
-
-  // === Phase 6: "datboip edition" fades in (simulated with color steps) ===
-  const uint16_t edY = underY + 14;
-  // Draw dim first, then bright
-  tft.setTextColor(0x3808, TFT_BLACK);  // very dim magenta
-  tft.drawCentreString("datboip edition", cx, edY, 2);
-  delay(60);
-  tft.setTextColor(0x780F, TFT_BLACK);  // medium magenta
-  tft.drawCentreString("datboip edition", cx, edY, 2);
-  delay(60);
-  tft.setTextColor(MAGENTA, TFT_BLACK);  // full magenta
-  tft.drawCentreString("datboip edition", cx, edY, 2);
-  delay(80);
-
-  // === Phase 7: Version + credit ===
-  const uint16_t verY = edY + 22;
-  tft.setTextColor(DIMGRAY, TFT_BLACK);
-  tft.drawCentreString(display_obj.version_number, cx, verY, 1);
-  delay(30);
-  tft.setTextColor(DKCYAN, TFT_BLACK);
-  tft.drawCentreString("by JustCallMeKoko", cx, verY + 12, 1);
   delay(40);
 
-  // === Phase 8: Circuit traces from corners ===
-  // Top-left: horizontal then down then right
-  tft.drawFastHLine(m + cs, m, 20, DKCYAN);
-  tft.drawFastVLine(m + cs + 20, m, 12, DKCYAN);
-  tft.drawFastHLine(m + cs + 20, m + 12, 15, DKCYAN);
-  tft.fillCircle(m + cs + 20, m, 2, MAGENTA);      // node
-  tft.fillCircle(m + cs + 35, m + 12, 2, MAGENTA);  // node
-  // Top-right mirror
-  tft.drawFastHLine(W - m - cs - 20, m, 20, DKCYAN);
-  tft.drawFastVLine(W - m - cs - 20, m, 12, DKCYAN);
-  tft.drawFastHLine(W - m - cs - 35, m + 12, 15, DKCYAN);
-  tft.fillCircle(W - m - cs - 20, m, 2, MAGENTA);
-  tft.fillCircle(W - m - cs - 35, m + 12, 2, MAGENTA);
-  // Bottom-left
-  tft.drawFastHLine(m + cs, H - m - 1, 20, DKCYAN);
-  tft.drawFastVLine(m + cs + 20, H - m - 12, 12, DKCYAN);
-  tft.fillCircle(m + cs + 20, H - m - 1, 2, MAGENTA);
-  // Bottom-right
-  tft.drawFastHLine(W - m - cs - 20, H - m - 1, 20, DKCYAN);
-  tft.drawFastVLine(W - m - cs - 20, H - m - 12, 12, DKCYAN);
-  tft.fillCircle(W - m - cs - 20, H - m - 1, 2, MAGENTA);
-  delay(80);
+  // Edition
+  tft.setTextColor(MAGENTA, TFT_BLACK);
+  tft.drawCentreString("datboip edition", cx, titleY + 26, 2);
+  delay(50);
 
-  // === Phase 9: Feature tags at bottom ===
-  const uint16_t tagY = H - m - 35;
+  // Version + credit
+  tft.setTextColor(DIMGRAY, TFT_BLACK);
+  tft.drawCentreString(display_obj.version_number, cx, titleY + 46, 1);
   tft.setTextColor(DKCYAN, TFT_BLACK);
-  tft.drawCentreString("AutoCycle | PWM Dim | BigTouch", cx, tagY, 1);
+  tft.drawCentreString("by JustCallMeKoko", cx, titleY + 58, 1);
+  delay(60);
 
-  delay(100);
+  // === Phase 4: Timeout bar at very bottom ===
+  const uint16_t barX = m + 2;
+  const uint16_t barW = W - m * 2 - 4;
+  const uint16_t barY = H - m - 5;
+  tft.drawRect(barX, barY, barW, 4, DIMGRAY);
+
+  // === Phase 5: Wait for tap or timeout (4 seconds) ===
+  uint8_t bootMode = 0;
+  uint32_t startWait = millis();
+  const uint32_t timeout = 4000;
+
+  while (millis() - startWait < timeout) {
+    // Animate timeout bar
+    uint32_t elapsed = millis() - startWait;
+    uint16_t fillW = (barW - 2) - (uint32_t)(barW - 2) * elapsed / timeout;
+    tft.fillRect(barX + 1, barY + 1, fillW, 2, DKCYAN);
+    tft.fillRect(barX + 1 + fillW, barY + 1, barW - 2 - fillW, 2, TFT_BLACK);
+
+    uint16_t tx, ty;
+    if (display_obj.updateTouch(&tx, &ty)) {
+      while (display_obj.updateTouch(&tx, &ty)) delay(10);
+
+      // Check which button was tapped
+      for (int i = 0; i < 4; i++) {
+        if (tx >= bx[i] && tx <= bx[i] + btnW &&
+            ty >= by[i] && ty <= by[i] + btnH) {
+          // Highlight button (fill solid)
+          uint16_t color = BOOT_MODES[i].color;
+          tft.fillRect(bx[i], by[i], btnW, btnH, color);
+          tft.setTextColor(TFT_BLACK, color);
+          tft.drawCentreString(BOOT_MODES[i].label, bx[i] + btnW / 2, by[i] + btnH / 2 - 7, 2);
+          delay(250);
+          bootMode = i + 1;
+          break;
+        }
+      }
+      if (bootMode > 0) break;
+    }
+    delay(30);
+  }
 
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  delay(500);
+  return bootMode;
 }
 #endif
 
@@ -450,9 +454,10 @@ void setup()
   brightnessInit();
   backlightOff();
 
+  uint8_t boot_shortcut = 0;
   #ifdef HAS_SCREEN
     #ifndef MARAUDER_CARDPUTER
-      drawCyberpunkSplash();
+      boot_shortcut = drawCyberpunkSplash();
     #else
       display_obj.tft.drawCentreString("ESP32 Marauder", TFT_HEIGHT/2, TFT_WIDTH * 0.20, 1);
       display_obj.tft.drawCentreString("JustCallMeKoko", TFT_HEIGHT/2, TFT_WIDTH * 0.38, 1);
@@ -523,24 +528,41 @@ void setup()
   #endif
 
   #ifdef HAS_SCREEN
-    delay(2000); // Show splash screen
     menu_function_obj.RunSetup();
   #endif
 
-  /*char ssidBuf[64] = {0};  // or prefill with existing SSID
-  if (keyboardInput(ssidBuf, sizeof(ssidBuf), "Enter SSID")) {
-    // user pressed OK
-    Serial.println(ssidBuf);
-  } else {
-    Serial.println(F("User exited keyboard"));
-  }
-
-  menu_function_obj.changeMenu(menu_function_obj.current_menu);*/
-
   wifi_scan_obj.StartScan(WIFI_SCAN_OFF);
-  
+
   Serial.println(F("CLI Ready"));
   cli_obj.RunSetup();
+
+  // Boot shortcuts: launch mode based on touch during splash
+  #ifdef HAS_SCREEN
+    if (boot_shortcut == 1) {
+      // Wardrive
+      Serial.println(F("[Boot] Wardrive shortcut"));
+      display_obj.clearScreen();
+      menu_function_obj.drawStatusBar();
+      wifi_scan_obj.StartScan(WIFI_SCAN_WAR_DRIVE, TFT_GREEN);
+    } else if (boot_shortcut == 2) {
+      // AutoCycle
+      Serial.println(F("[Boot] AutoCycle shortcut"));
+      auto_cycle_obj.start();
+      menu_function_obj.drawAutoCycleStatus();
+    } else if (boot_shortcut == 3) {
+      // Station Wardrive
+      Serial.println(F("[Boot] Station Wardrive shortcut"));
+      display_obj.clearScreen();
+      menu_function_obj.drawStatusBar();
+      wifi_scan_obj.StartScan(WIFI_SCAN_STATION_WAR_DRIVE, TFT_ORANGE);
+    } else if (boot_shortcut == 4) {
+      // BLE Scan
+      Serial.println(F("[Boot] BLE Scan shortcut"));
+      display_obj.clearScreen();
+      menu_function_obj.drawStatusBar();
+      wifi_scan_obj.StartScan(BT_SCAN_ALL, TFT_BLUE);
+    }
+  #endif
 }
 
 
