@@ -1,8 +1,10 @@
 #include "MenuFunctions.h"
 #include "lang_var.h"
+#include "Buffer.h"
 
 #ifdef HAS_SCREEN
 
+extern Buffer buffer_obj;
 extern const unsigned char menu_icons[][66];
 
 MenuFunctions::MenuFunctions()
@@ -69,35 +71,36 @@ void MenuFunctions::buttonSelected(int b, int x) {
 
 void MenuFunctions::displayMenuButtons() {
   #ifdef HAS_ILI9341
-    // Draw lines to show each menu button
+    // Draw lines to show touch zone boundaries (25% / 50% / 25%)
+    const uint16_t zone_y[] = {0, (uint16_t)(TFT_HEIGHT * 25 / 100), (uint16_t)(TFT_HEIGHT * 75 / 100)};
     for (int i = 0; i < 3; i++) {
 
       // Draw horizontal line on left
-      display_obj.tft.drawLine(0, 
-                              TFT_HEIGHT / 3 * (i),
+      display_obj.tft.drawLine(0,
+                              zone_y[i],
                               (TFT_WIDTH / 12) / 2,
-                              TFT_HEIGHT / 3 * (i),
+                              zone_y[i],
                               TFT_FARTGRAY);
 
       // Draw horizontal line on right
-      display_obj.tft.drawLine(TFT_WIDTH - 1 - ((TFT_WIDTH / 12) / 2), 
-                              TFT_HEIGHT / 3 * (i),
+      display_obj.tft.drawLine(TFT_WIDTH - 1 - ((TFT_WIDTH / 12) / 2),
+                              zone_y[i],
                               TFT_WIDTH,
-                              TFT_HEIGHT / 3 * (i),
+                              zone_y[i],
                               TFT_FARTGRAY);
 
       // Draw vertical line on left
-      display_obj.tft.drawLine(0, 
-                              (TFT_HEIGHT / 3 * (i)) - ((TFT_WIDTH / 12) / 2),
+      display_obj.tft.drawLine(0,
+                              zone_y[i] - ((TFT_WIDTH / 12) / 2),
                               0,
-                              (TFT_HEIGHT / 3 * (i)) + ((TFT_WIDTH / 12) / 2),
+                              zone_y[i] + ((TFT_WIDTH / 12) / 2),
                               TFT_FARTGRAY);
 
       // Draw vertical line on right
-      display_obj.tft.drawLine(TFT_WIDTH - 1, 
-                              (TFT_HEIGHT / 3 * (i)) - ((TFT_WIDTH / 12) / 2),
+      display_obj.tft.drawLine(TFT_WIDTH - 1,
+                              zone_y[i] - ((TFT_WIDTH / 12) / 2),
                               TFT_WIDTH - 1,
-                              (TFT_HEIGHT / 3 * (i)) + ((TFT_WIDTH / 12) / 2),
+                              zone_y[i] + ((TFT_WIDTH / 12) / 2),
                               TFT_FARTGRAY);
     }
   #endif
@@ -187,6 +190,43 @@ void MenuFunctions::main(uint32_t currentTime)
       pressed = display_obj.updateTouch(&t_x, &t_y);
   #endif
 
+  // AutoCycle: any touch stops it and returns to main menu
+  #ifdef HAS_ILI9341
+    if (pressed && auto_cycle_obj.isRunning()) {
+      while (display_obj.updateTouch(&t_x, &t_y)) delay(10); // wait for release
+      auto_cycle_obj.stop();
+      display_obj.clearScreen();
+      this->changeMenu(&mainMenu, true);
+      return;
+    }
+  #endif
+
+  // Brightness gesture: hold top or bottom zone 1.5s to enter brightness mode
+  #ifdef HAS_ILI9341
+    if (pressed && (wifi_scan_obj.currentScanMode == WIFI_SCAN_OFF ||
+                    wifi_scan_obj.currentScanMode == WIFI_CONNECTED)) {
+      uint16_t zoneUp = TFT_HEIGHT * 25 / 100;
+      uint16_t zoneDown = TFT_HEIGHT * 75 / 100;
+      if (t_y < zoneUp || t_y >= zoneDown) {
+        uint32_t hold_start = millis();
+        uint16_t hx, hy;
+        bool held = false;
+        while (display_obj.updateTouch(&hx, &hy)) {
+          if (millis() - hold_start >= 1500) {
+            held = true;
+            break;
+          }
+          delay(10);
+        }
+        if (held) {
+          // Wait for release before entering brightness mode
+          while (display_obj.updateTouch(&hx, &hy)) delay(10);
+          this->brightnessMode();
+          return;
+        }
+      }
+    }
+  #endif
 
   // This is if there are scans/attacks going on
   #ifdef HAS_ILI9341
@@ -565,7 +605,7 @@ void MenuFunctions::main(uint32_t currentTime)
             this->displayMenuButtons();
         }
       }
-  
+
       // Check if any key has changed state
       /*for (uint8_t b = 0; b < current_menu->list->size(); b++) {
         display_obj.tft.setFreeFont(MENU_FONT);
@@ -1527,6 +1567,16 @@ void MenuFunctions::RunSetup()
     	});
 	}
   #endif
+  this->addNodes(&mainMenu, "AutoCycle", TFTYELLOW, NULL, FLOCK, [this]() {
+    if (auto_cycle_obj.isRunning()) {
+      auto_cycle_obj.stop();
+      display_obj.clearScreen();
+      this->changeMenu(&mainMenu, true);
+    } else {
+      auto_cycle_obj.start();
+      this->drawAutoCycleStatus();
+    }
+  });
   this->addNodes(&mainMenu, text_table1[9], TFTBLUE, NULL, DEVICE, [this]() {
     this->changeMenu(&deviceMenu, true);
   });
@@ -2642,6 +2692,9 @@ void MenuFunctions::RunSetup()
     this->changeMenu(&saveFileMenu, true);
   });
 
+  this->addNodes(&deviceMenu, "Brightness", TFTYELLOW, NULL, KEYBOARD_ICO, [this]() {
+    this->brightnessMode();
+  });
   this->addNodes(&deviceMenu, text_table1[17], TFTWHITE, NULL, DEVICE_INFO, [this]() {
     wifi_scan_obj.currentScanMode = SHOW_INFO;
     this->changeMenu(&infoMenu, true);
@@ -3589,18 +3642,25 @@ void MenuFunctions::buildButtons(Menu *menu, int starting_index, String button_n
 
   }
 
+  // Touch zones: Big Middle layout (25% / 50% / 25%)
+  // Zone 0 (Up):     0 to 25% of screen height
+  // Zone 1 (Select): 25% to 75% of screen height
+  // Zone 2 (Down):   75% to 100% of screen height
+  const uint16_t zone_tops[] = {0, (uint16_t)(TFT_HEIGHT * 25 / 100), (uint16_t)(TFT_HEIGHT * 75 / 100)};
+  const uint16_t zone_heights[] = {(uint16_t)(TFT_HEIGHT * 25 / 100), (uint16_t)(TFT_HEIGHT * 50 / 100), (uint16_t)(TFT_HEIGHT * 25 / 100)};
   for (int i = BUTTON_ARRAY_LEN; i < BUTTON_ARRAY_LEN + 3; i++) {
+    uint8_t zi = i - BUTTON_ARRAY_LEN;
     uint16_t x = TFT_WIDTH / 2;
-    uint16_t y = TFT_HEIGHT / 3 * (i - BUTTON_ARRAY_LEN) + ((TFT_HEIGHT / 3) / 2);
+    uint16_t y = zone_tops[zi] + zone_heights[zi] / 2;
     uint16_t w = TFT_WIDTH;
-    uint16_t h = TFT_HEIGHT / 3 - 1;
+    uint16_t h = zone_heights[zi] - 1;
 
     display_obj.key[i].initButton(&display_obj.tft,
                                   x,
                                   y, // Positioning buttons vertically
                                   w,
                                   h,
-                                  TFT_LIGHTGREY, // Outline
+                                  TFT_BLACK, // Outline (invisible)
                                   TFT_BLACK, // Fill
                                   TFT_BLACK, // Text color
                                   "Chicken",
@@ -3662,6 +3722,203 @@ void MenuFunctions::displayCurrentMenu(int start_index)
   }
 
   this->displayMenuButtons();
+}
+
+// ============================================================
+// BRIGHTNESS ADJUSTMENT MODE
+// Hold SELECT 3s to enter. UP = brighter, DOWN = dimmer, SELECT = save & exit.
+// Hold SELECT 5s in brightness mode = screen off (any touch wakes).
+// ============================================================
+void MenuFunctions::brightnessMode() {
+  extern void brightnessSave(uint8_t level);
+  extern uint8_t getBrightnessLevel();
+
+  const uint8_t levels[] = {64, 128, 192, 255};
+  const uint8_t numLevels = 4;
+  uint8_t level = getBrightnessLevel();
+
+  display_obj.tft.fillScreen(TFT_BLACK);
+  display_obj.tft.setTextColor(TFT_CYAN, TFT_BLACK);
+  display_obj.tft.drawCentreString("BRIGHTNESS", TFT_WIDTH/2, 30, 2);
+
+  display_obj.tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+  display_obj.tft.drawCentreString("TAP TOP = BRIGHTER", TFT_WIDTH/2, 10, 1);
+  display_obj.tft.drawCentreString("TAP BOTTOM = DIMMER", TFT_WIDTH/2, TFT_HEIGHT - 20, 1);
+  display_obj.tft.setTextColor(TFT_RED, TFT_BLACK);
+  display_obj.tft.drawCentreString("TAP MIDDLE or WAIT 3s = SAVE", TFT_WIDTH/2, TFT_HEIGHT/2 + 50, 1);
+
+  auto drawBar = [&]() {
+    uint16_t barX = 30, barY = TFT_HEIGHT/2 - 25, barW = TFT_WIDTH - 60, barH = 30;
+    display_obj.tft.drawRect(barX, barY, barW, barH, TFT_WHITE);
+    uint16_t fillW = (barW - 4) * (level + 1) / numLevels;
+    display_obj.tft.fillRect(barX + 2, barY + 2, barW - 4, barH - 4, TFT_BLACK);
+    display_obj.tft.fillRect(barX + 2, barY + 2, fillW, barH - 4, TFT_CYAN);
+    display_obj.tft.fillRect(0, barY + barH + 5, TFT_WIDTH, 20, TFT_BLACK);
+    display_obj.tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    String pct = String(levels[level] * 100 / 255) + "%";
+    display_obj.tft.drawCentreString(pct, TFT_WIDTH/2, barY + barH + 8, 2);
+  };
+  drawBar();
+
+  uint16_t zoneUp = TFT_HEIGHT * 25 / 100;
+  uint16_t zoneDown = TFT_HEIGHT * 75 / 100;
+  uint32_t lastTouch = millis();
+
+  while (true) {
+    // Auto-save after 3s of no touch
+    if (millis() - lastTouch >= 3000) {
+      brightnessSave(level);
+      break;
+    }
+
+    uint16_t tx, ty;
+    if (display_obj.updateTouch(&tx, &ty)) {
+      lastTouch = millis();
+      // Wait for release
+      while (display_obj.updateTouch(&tx, &ty)) delay(10);
+
+      if (ty < zoneUp) {
+        if (level < numLevels - 1) {
+          level++;
+          ledcWrite(TFT_BL, levels[level]);
+          drawBar();
+        }
+      } else if (ty >= zoneDown) {
+        if (level > 0) {
+          level--;
+          ledcWrite(TFT_BL, levels[level]);
+          drawBar();
+        }
+      } else {
+        // Middle = save now
+        brightnessSave(level);
+        break;
+      }
+      delay(150);
+    }
+    delay(30);
+  }
+
+  this->changeMenu(current_menu, true);
+}
+
+// ============================================================
+// AUTOCYCLE STATUS SCREEN
+// Draws current mode, progress bar, time remaining, cycle count
+// ============================================================
+void MenuFunctions::returnToMainMenu() {
+  display_obj.init();
+  this->changeMenu(&mainMenu, true);
+}
+
+// Fullscreen AutoCycle status — blocks until user taps to stop
+void MenuFunctions::drawAutoCycleStatus() {
+  if (!auto_cycle_obj.isRunning()) return;
+
+  display_obj.clearScreen();
+
+  // Header
+  display_obj.tft.setTextColor(TFT_CYAN, TFT_BLACK);
+  display_obj.tft.drawCentreString("AUTOCYCLE", TFT_WIDTH/2, 10, 2);
+
+  // Layout constants
+  const uint16_t modeY = 50;      // current mode label
+  const uint16_t barY = 90;       // progress bar
+  const uint16_t barH = 20;
+  const uint16_t barX = 20;
+  const uint16_t barW = TFT_WIDTH - 40;
+  const uint16_t timeY = 120;     // time text
+  const uint16_t stepY = 155;     // step indicator
+  const uint16_t cycleY = 185;    // cycle count
+  const uint16_t stopY = 240;     // stop hint
+
+  // Static: stop hint
+  display_obj.tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+  display_obj.tft.drawCentreString("tap anywhere to stop", TFT_WIDTH/2, stopY, 2);
+
+  // Track previous values to only redraw on change
+  const char* prevLabel = "";
+  uint16_t prevElapsed = 0xFFFF;
+  uint16_t prevCycle = 0xFFFF;
+  uint8_t prevIndex = 0xFF;
+
+  while (auto_cycle_obj.isRunning()) {
+    // Let AutoCycle advance
+    auto_cycle_obj.main(millis());
+
+    const char* label = auto_cycle_obj.getCurrentLabel();
+    uint16_t elapsed = auto_cycle_obj.getElapsedSec();
+    uint16_t duration = auto_cycle_obj.getCurrentDuration();
+    uint16_t color = auto_cycle_obj.getCurrentColor();
+    uint8_t idx = auto_cycle_obj.getCurrentIndex();
+    uint16_t cycles = auto_cycle_obj.getCycleCount();
+
+    // Update mode label only when it changes
+    if (label != prevLabel) {
+      display_obj.tft.fillRect(0, modeY, TFT_WIDTH, 30, TFT_BLACK);
+      display_obj.tft.setTextColor(color, TFT_BLACK);
+      display_obj.tft.drawCentreString(label, TFT_WIDTH/2, modeY, 4);
+      prevLabel = label;
+      prevElapsed = 0xFFFF; // force bar redraw
+    }
+
+    // Update progress bar + time every second
+    if (elapsed != prevElapsed) {
+      // Progress bar outline
+      display_obj.tft.drawRect(barX, barY, barW, barH, TFT_WHITE);
+      // Fill
+      uint16_t fillW = 0;
+      if (duration > 0) fillW = (uint32_t)(barW - 2) * elapsed / duration;
+      if (fillW > barW - 2) fillW = barW - 2;
+      display_obj.tft.fillRect(barX + 1, barY + 1, fillW, barH - 2, color);
+      display_obj.tft.fillRect(barX + 1 + fillW, barY + 1, barW - 2 - fillW, barH - 2, TFT_BLACK);
+
+      // Time: "32s / 60s"
+      display_obj.tft.fillRect(0, timeY, TFT_WIDTH, 20, TFT_BLACK);
+      char timeBuf[24];
+      snprintf(timeBuf, sizeof(timeBuf), "%ds / %ds", elapsed, duration);
+      display_obj.tft.setTextColor(TFT_WHITE, TFT_BLACK);
+      display_obj.tft.drawCentreString(timeBuf, TFT_WIDTH/2, timeY, 2);
+      prevElapsed = elapsed;
+    }
+
+    // Step indicator: "3 / 5"
+    if (idx != prevIndex) {
+      display_obj.tft.fillRect(0, stepY, TFT_WIDTH, 20, TFT_BLACK);
+      char stepBuf[16];
+      snprintf(stepBuf, sizeof(stepBuf), "Step %d / %d", idx + 1, auto_cycle_obj.getNumModes());
+      display_obj.tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+      display_obj.tft.drawCentreString(stepBuf, TFT_WIDTH/2, stepY, 2);
+      prevIndex = idx;
+    }
+
+    // Cycle count
+    if (cycles != prevCycle) {
+      display_obj.tft.fillRect(0, cycleY, TFT_WIDTH, 20, TFT_BLACK);
+      char cycleBuf[24];
+      snprintf(cycleBuf, sizeof(cycleBuf), "Cycle #%d", cycles + 1);
+      display_obj.tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+      display_obj.tft.drawCentreString(cycleBuf, TFT_WIDTH/2, cycleY, 2);
+      prevCycle = cycles;
+    }
+
+    // Check for touch to stop
+    uint16_t tx, ty;
+    if (display_obj.updateTouch(&tx, &ty)) {
+      while (display_obj.updateTouch(&tx, &ty)) delay(10); // wait release
+      auto_cycle_obj.stop();
+      break;
+    }
+
+    // Save buffer
+    buffer_obj.save();
+
+    delay(100);
+  }
+
+  // Return to main menu
+  display_obj.clearScreen();
+  this->changeMenu(&mainMenu, true);
 }
 
 #endif

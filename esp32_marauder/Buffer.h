@@ -22,6 +22,8 @@ class Buffer {
     void pcapOpen(String file_name, fs::FS* fs, bool serial);
     void logOpen(String file_name, fs::FS* fs, bool serial);
     void gpxOpen(String file_name, fs::FS* fs, bool serial);
+    void setPathPrefix(String prefix);
+    void clearPathPrefix();
     void append(wifi_promiscuous_pkt_t *packet, int len);
     void append(String log);
     void save();
@@ -49,6 +51,7 @@ class Buffer {
     bool saving = false; // currently saving onto the SD card
 
     String fileName = "/0.pcap";
+    String pathPrefix = "";
     File file;
     fs::FS* fs;
     bool serial;

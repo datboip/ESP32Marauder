@@ -3,14 +3,23 @@
 #ifndef AutoCycle_h
 #define AutoCycle_h
 
-#include "configs.h"
-#include "WiFiScan.h"
+#include <Arduino.h>
 
-extern WiFiScan wifi_scan_obj;
+// Forward-declare WiFiScan to avoid including its header (which pulls in
+// utils.h, EvilPortal.h, lang_var.h and causes multiple-definition errors)
+class WiFiScan;
+
+// Scan mode constants (must match WiFiScan.h)
+#define AC_SCAN_OFF        0
+#define AC_SCAN_PROBE      1
+#define AC_SCAN_AP         2
+#define AC_SCAN_DEAUTH     5
+#define AC_BT_SCAN_ALL    10
+#define AC_SCAN_TARGET_AP 16
 
 // Scan modes to cycle through
 struct CycleMode {
-  uint8_t scan_mode;     // WIFI_SCAN_PROBE, WIFI_SCAN_AP, etc.
+  uint8_t scan_mode;     // AC_SCAN_PROBE, AC_SCAN_AP, etc.
   uint16_t color;        // TFT display color
   uint16_t duration_sec; // How long to run this scan
   const char* label;     // Human-readable name
@@ -45,6 +54,7 @@ class AutoCycle {
     uint16_t getElapsedSec();
     uint16_t getCurrentDuration();
     const char* getCurrentLabel();
+    uint16_t getCurrentColor();
 
     void setPauseDuration(uint16_t sec);
     void setModeDuration(uint8_t index, uint16_t sec);

@@ -118,6 +118,9 @@ const char PROGMEM BT_SPOOFAT_CMD[] = "spoofat";
 const char PROGMEM BT_WARDRIVE_CMD[] = "btwardrive";
 const char PROGMEM BT_SKIM_CMD[] = "sniffskim";
 
+// Brightness
+const char PROGMEM BRIGHTNESS_CMD[] = "brightness";
+
 // AutoCycle + SD file access
 const char PROGMEM AUTOCYCLE_CMD[] = "autocycle";
 const char PROGMEM LISTFILES_CMD[] = "listfiles";
@@ -197,6 +200,9 @@ const char PROGMEM HELP_BT_SPOOFAT_CMD[] = "spoofat -t <index>";
 //onst char PROGMEM HELP_BT_SPAM_ALL_CMD[] = "btspamall";
 const char PROGMEM HELP_BT_WARDRIVE_CMD[] = "btwardrive";
 const char PROGMEM HELP_BT_SKIM_CMD[] = "sniffskim";
+
+// Brightness
+const char PROGMEM HELP_BRIGHTNESS_CMD[] = "brightness [-c cycle] [-s <0-3>]";
 
 // AutoCycle + SD
 const char PROGMEM HELP_AUTOCYCLE_CMD[] = "autocycle [-s start/stop/status] [-t <mode_index> <seconds>] [-p <pause_seconds>]";

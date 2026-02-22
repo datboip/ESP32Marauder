@@ -4,31 +4,41 @@
 Buffer::Buffer(){
   bufA = (uint8_t*)malloc(BUF_SIZE);
   bufB = (uint8_t*)malloc(BUF_SIZE);
+  fs = NULL;
+}
+
+void Buffer::setPathPrefix(String prefix) {
+  pathPrefix = prefix;
+}
+
+void Buffer::clearPathPrefix() {
+  pathPrefix = "";
 }
 
 void Buffer::createFile(String name, bool is_pcap, bool is_gpx){
   int i=0;
+  String prefix = pathPrefix.length() > 0 ? "/" + pathPrefix + "/" : "/";
   if (is_pcap) {
     do{
-      fileName = "/"+name+"_"+(String)i+".pcap";
+      fileName = prefix+name+"_"+(String)i+".pcap";
       i++;
     } while(fs->exists(fileName));
   }
   else if ((!is_pcap) && (!is_gpx)) {
     do{
-      fileName = "/"+name+"_"+(String)i+".log";
+      fileName = prefix+name+"_"+(String)i+".log";
       i++;
     } while(fs->exists(fileName));
   }
   else {
     do{
-      fileName = "/"+name+"_"+(String)i+".gpx";
+      fileName = prefix+name+"_"+(String)i+".gpx";
       i++;
     } while(fs->exists(fileName));
   }
 
   Serial.println(fileName);
-  
+
   file = fs->open(fileName, FILE_WRITE);
   file.close();
 }

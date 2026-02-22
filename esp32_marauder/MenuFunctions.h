@@ -4,6 +4,8 @@
 #define MenuFunctions_h
 
 #include "configs.h"
+#include "AutoCycle.h"
+extern AutoCycle auto_cycle_obj;
 
 #ifdef MARAUDER_CARDPUTER
   #include "Keyboard.h"
@@ -277,6 +279,9 @@ class MenuFunctions
     void changeMenu(Menu* menu, bool simple_change = false);
     void drawStatusBar();
     void displayCurrentMenu(int start_index = 0);
+    void brightnessMode();
+    void drawAutoCycleStatus();
+    void returnToMainMenu();
     void main(uint32_t currentTime);
     void RunSetup();
     void orientDisplay();

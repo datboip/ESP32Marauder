@@ -1,4 +1,18 @@
 #include "AutoCycle.h"
+#include "WiFiScan.h"
+#include "Buffer.h"
+
+extern WiFiScan wifi_scan_obj;
+extern Buffer buffer_obj;
+
+// TFT color constants (from TFT_eSPI) - define locally to avoid header deps
+#ifndef TFT_CYAN
+#define TFT_CYAN    0x07FF
+#define TFT_MAGENTA 0xF81F
+#define TFT_GREEN   0x07E0
+#define TFT_RED     0xF800
+#define TFT_BLUE    0x001F
+#endif
 
 AutoCycle::AutoCycle() {
   this->loadDefaults();
@@ -6,11 +20,11 @@ AutoCycle::AutoCycle() {
 
 void AutoCycle::loadDefaults() {
   num_modes = 5;
-  modes[0] = {WIFI_SCAN_PROBE,     TFT_CYAN,    60,  "Probe Sniff"};
-  modes[1] = {WIFI_SCAN_AP,        TFT_MAGENTA, 45,  "Beacon Sniff"};
-  modes[2] = {WIFI_SCAN_TARGET_AP, TFT_GREEN,   30,  "AP Scan"};
-  modes[3] = {WIFI_SCAN_DEAUTH,    TFT_RED,     30,  "Deauth Detect"};
-  modes[4] = {BT_SCAN_ALL,         TFT_BLUE,    45,  "BLE Scan"};
+  modes[0] = {AC_SCAN_PROBE,     TFT_CYAN,    60,  "Probe Sniff"};
+  modes[1] = {AC_SCAN_AP,        TFT_MAGENTA, 45,  "Beacon Sniff"};
+  modes[2] = {AC_SCAN_TARGET_AP, TFT_GREEN,   30,  "AP Scan"};
+  modes[3] = {AC_SCAN_DEAUTH,    TFT_RED,     30,  "Deauth Detect"};
+  modes[4] = {AC_BT_SCAN_ALL,    TFT_BLUE,    45,  "BLE Scan"};
   pause_duration = 5;
 }
 
@@ -20,7 +34,8 @@ void AutoCycle::start() {
   current_index = 0;
   pausing = false;
   cycle_count = 0;
-  Serial.println(F("[AutoCycle] Started"));
+  buffer_obj.setPathPrefix("autocycle");
+  Serial.println(F("[AutoCycle] Started — output to /autocycle/"));
   startNextMode();
 }
 
@@ -29,6 +44,7 @@ void AutoCycle::stop() {
   running = false;
   pausing = false;
   wifi_scan_obj.StartScan(WIFI_SCAN_OFF);
+  buffer_obj.clearPathPrefix();
   Serial.println(F("[AutoCycle] Stopped"));
 }
 
@@ -64,6 +80,12 @@ const char* AutoCycle::getCurrentLabel() {
   if (pausing) return "Pause";
   if (current_index < num_modes) return modes[current_index].label;
   return "Idle";
+}
+
+uint16_t AutoCycle::getCurrentColor() {
+  if (pausing) return 0x7BEF; // gray
+  if (current_index < num_modes) return modes[current_index].color;
+  return 0xFFFF; // white
 }
 
 void AutoCycle::setPauseDuration(uint16_t sec) {
