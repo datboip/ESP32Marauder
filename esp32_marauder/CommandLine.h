@@ -125,6 +125,7 @@ const char PROGMEM BRIGHTNESS_CMD[] = "brightness";
 const char PROGMEM AUTOCYCLE_CMD[] = "autocycle";
 const char PROGMEM LISTFILES_CMD[] = "listfiles";
 const char PROGMEM READFILE_CMD[] = "readfile";
+const char PROGMEM WARDRIVEPOI_CMD[] = "wardrivepoi";
 
 
 //// Command help messages
@@ -208,6 +209,7 @@ const char PROGMEM HELP_BRIGHTNESS_CMD[] = "brightness [-c cycle] [-s <0-3>]";
 const char PROGMEM HELP_AUTOCYCLE_CMD[] = "autocycle [-s start/stop/status] [-t <mode_index> <seconds>] [-p <pause_seconds>]";
 const char PROGMEM HELP_LISTFILES_CMD[] = "listfiles [directory]";
 const char PROGMEM HELP_READFILE_CMD[] = "readfile <filepath>";
+const char PROGMEM HELP_WARDRIVEPOI_CMD[] = "wardrivepoi [label] - Tag a GPS POI during wardrive";
 const char PROGMEM HELP_FOOT[] = "==================================";
 
 
