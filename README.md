@@ -21,107 +21,74 @@
 
 ---
 
-## datboip edition
+<h2>datboip edition</h2>
 
-Custom fork of ESP32 Marauder for the V6.1 (LOLIN D32 + ILI9341 touchscreen) with quality-of-life mods for wardriving and daily use. Built on top of [JustCallMeKoko's](https://github.com/justcallmekoko/ESP32Marauder) original firmware.
+<p>
+  <img src="https://img.shields.io/badge/board-Marauder_V6.1-blueviolet?style=for-the-badge" alt="Board"/>
+  <img src="https://img.shields.io/badge/base-v0.13.6-blue?style=for-the-badge" alt="Version"/>
+  <img src="https://img.shields.io/badge/focus-wardriving-green?style=for-the-badge" alt="Focus"/>
+</p>
+
+Custom fork with quality-of-life mods for wardriving and daily use on the V6.1 (LOLIN D32 + ILI9341 touchscreen). Built on top of [JustCallMeKoko's](https://github.com/justcallmekoko/ESP32Marauder) original firmware.
 
 ### Downloads
 
-Two pre-compiled releases available for Marauder V6.1:
+<table>
+  <tr>
+    <td>
+      <a href="https://github.com/datboip/ESP32Marauder/releases/tag/v0.13.6-datboip">
+        <img src="https://img.shields.io/badge/datboip_edition-Full_Mod_Package-ff6600?style=for-the-badge&logo=github" alt="datboip edition"/>
+      </a>
+    </td>
+    <td>All features below — AutoCycle, boot shortcuts, brightness, big touch zones, CLI extras</td>
+    <td>
+      <a href="https://github.com/datboip/ESP32Marauder/releases/download/v0.13.6-datboip/esp32_marauder.ino.bin">
+        <img src="https://img.shields.io/badge/download-.bin-brightgreen?style=flat-square" alt="Download"/>
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <a href="https://github.com/datboip/ESP32Marauder/releases/tag/v0.13.6-brightness">
+        <img src="https://img.shields.io/badge/brightness_only-Clean_Patch-0099ff?style=for-the-badge&logo=github" alt="Brightness only"/>
+      </a>
+    </td>
+    <td>PWM brightness on stock firmware — submitted as <a href="https://github.com/justcallmekoko/ESP32Marauder/pull/1142">PR #1142</a> to upstream</td>
+    <td>
+      <a href="https://github.com/datboip/ESP32Marauder/releases/download/v0.13.6-brightness/esp32_marauder.ino.bin">
+        <img src="https://img.shields.io/badge/download-.bin-brightgreen?style=flat-square" alt="Download"/>
+      </a>
+    </td>
+  </tr>
+</table>
 
-| Release | Description | Download |
-|---------|-------------|----------|
-| **[datboip edition](https://github.com/datboip/ESP32Marauder/releases/tag/v0.13.6-datboip)** | Full mod package — all features below | [esp32_marauder.ino.bin](https://github.com/datboip/ESP32Marauder/releases/download/v0.13.6-datboip/esp32_marauder.ino.bin) |
-| **[Brightness only](https://github.com/datboip/ESP32Marauder/releases/tag/v0.13.6-brightness)** | Clean PWM brightness add-on for stock firmware | [esp32_marauder.ino.bin](https://github.com/datboip/ESP32Marauder/releases/download/v0.13.6-brightness/esp32_marauder.ino.bin) |
+### How to Flash
 
-> The **brightness-only** release is a minimal patch on top of upstream — no other changes. It's also submitted as [PR #1142](https://github.com/justcallmekoko/ESP32Marauder/pull/1142) to upstream.
+<details>
+<summary><b>Option 1 — SD Card</b> (no computer needed)</summary>
+<br>
+<ol>
+  <li>Download <code>esp32_marauder.ino.bin</code> from the release links above</li>
+  <li>Rename it to <code>update.bin</code></li>
+  <li>Copy to the <b>root</b> of your SD card</li>
+  <li>Insert SD into Marauder, power on</li>
+  <li>Go to <b>Device → Update Firmware</b> and select the file</li>
+  <li>It flashes and reboots automatically</li>
+</ol>
+</details>
 
-### What's in the datboip edition
+<details>
+<summary><b>Option 2 — USB</b></summary>
+<br>
 
-```
-╔═══════════════════════════════════════════════╗
-║        ESP32 Marauder  ·  datboip edition     ║
-║                    v0.13.6                    ║
-╠═══════════════════════════════════════════════╣
-║                                               ║
-║   BOOT SHORTCUTS (tap during 4s splash)       ║
-║                                               ║
-║   ┌──────────────┐   ┌──────────────────┐     ║
-║   │   WARDRIVE   │   │    AUTOCYCLE     │     ║
-║   │     (TL)     │   │      (TR)        │     ║
-║   └──────────────┘   └──────────────────┘     ║
-║   ┌──────────────┐   ┌──────────────────┐     ║
-║   │  STA WDRIVE  │   │    BLE SCAN     │     ║
-║   │     (BL)     │   │      (BR)        │     ║
-║   └──────────────┘   └──────────────────┘     ║
-║                                               ║
-╠═══════════════════════════════════════════════╣
-║                                               ║
-║   TOUCH LAYOUT          BRIGHTNESS            ║
-║   ┌─────────────┐                             ║
-║   │  ▲ UP  25%  │       Hold any zone 1.5s    ║
-║   ├─────────────┤       to enter adjust mode  ║
-║   │             │                             ║
-║   │ ■ SEL  50% │       ░░░░░░░░░█████ 100%   ║
-║   │             │       10 levels · NVS saved ║
-║   ├─────────────┤                             ║
-║   │  ▼ DN  25%  │                             ║
-║   └─────────────┘                             ║
-║                                               ║
-╚═══════════════════════════════════════════════╝
-```
-
-**AutoCycle Mode**
-- Automatically cycles through scan modes: Probe → Beacon → AP → Deauth Detect → BLE
-- Fullscreen live display with current mode, progress bar, timer, step/cycle counters
-- Start from main menu or CLI: `autocycle -s start/stop/status`
-- Configurable per-mode durations and pause time
-
-**PWM Brightness Control**
-- 10-level PWM dimming (10% steps) instead of binary on/off
-- Persisted to NVS flash across reboots
-- Hold top or bottom touch zone 1.5s on main menu, or Device → Brightness
-- CLI: `brightness -c` (cycle) / `brightness -s <0-9>` (set level)
-
-**Boot Shortcuts**
-- 4 corner tap zones on the splash screen (4s timeout)
-- Top-Left: Wardrive / Top-Right: AutoCycle / Bottom-Left: Station Wardrive / Bottom-Right: BLE Scan
-- Power on and go — no menu navigation needed
-
-**Big Touch Zones**
-- 25% / 50% / 25% layout (Up / Select / Down) instead of equal thirds
-- Easier to hit while driving
-
-**Extra CLI Commands**
-- `listfiles [dir]` — list files on SD card
-- `readfile <path>` — read file contents from SD
-- `autocycle` — control auto-cycling scan modes
-- `brightness` — adjust backlight
-
-**Cyberpunk Boot Splash**
-- Animated boot sequence with border draw-in, typewriter title, circuit traces
-- Credits JustCallMeKoko as original author
-
-**V6.1 Fixes**
-- Buffer crash when AutoCycle started without SD card
-- Headless mode triggering on every boot (GPIO0 held low by USB reset)
-- Backlight not working after flash (PWM init ordering)
-
-### Flashing
-
-**Option 1 — SD card (no computer needed)**
-1. Download `esp32_marauder.ino.bin` from releases above
-2. Rename it to `update.bin`
-3. Copy to the root of your SD card
-4. On the Marauder, go to **Device → Update Firmware** and select the file
-5. It flashes and reboots automatically
-
-**Option 2 — USB**
 ```bash
 esptool.py --port /dev/ttyUSB0 --baud 921600 write_flash 0x10000 esp32_marauder.ino.bin
 ```
+</details>
 
-### Building from Source
+<details>
+<summary><b>Option 3 — Build from Source</b></summary>
+<br>
 
 ```bash
 # Uncomment MARAUDER_V6_1 in configs.h (line 17), then:
@@ -130,6 +97,90 @@ arduino-cli compile --fqbn esp32:esp32:d32:PartitionScheme=min_spiffs esp32_mara
 # Flash
 arduino-cli upload --fqbn esp32:esp32:d32 --port /dev/ttyUSB0 esp32_marauder/
 ```
+</details>
+
+---
+
+### Features
+
+<table>
+  <tr>
+    <td width="80" align="center">
+      <img src="https://img.shields.io/badge/-%E2%9F%B3-black?style=for-the-badge" alt="icon"/>
+      <br><b>AutoCycle</b>
+    </td>
+    <td>
+      Automatically cycles through scan modes: <b>Probe → Beacon → AP → Deauth Detect → BLE</b><br>
+      Fullscreen live display with current mode, progress bar, timer, step/cycle counters<br>
+      Start from main menu, tap anywhere to stop<br>
+      <code>autocycle -s start/stop/status</code> · <code>autocycle -t &lt;idx&gt; &lt;secs&gt;</code> · <code>autocycle -p &lt;secs&gt;</code>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://img.shields.io/badge/-%E2%98%80%EF%B8%8F-black?style=for-the-badge" alt="icon"/>
+      <br><b>Brightness</b>
+    </td>
+    <td>
+      <b>10-level PWM dimming</b> (10% steps) instead of binary on/off<br>
+      Persisted to NVS flash — survives reboots<br>
+      Hold top or bottom touch zone <b>1.5s</b> on main menu, or <b>Device → Brightness</b><br>
+      <code>brightness -c</code> (cycle) · <code>brightness -s &lt;0-9&gt;</code> (set level)
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://img.shields.io/badge/-%E2%9A%A1-black?style=for-the-badge" alt="icon"/>
+      <br><b>Boot<br>Shortcuts</b>
+    </td>
+    <td>
+      4 corner tap zones on the splash screen (4s timeout) — power on and go:<br><br>
+      <table>
+        <tr>
+          <td align="center"><kbd>Wardrive</kbd><br><sub>top-left</sub></td>
+          <td align="center"><kbd>AutoCycle</kbd><br><sub>top-right</sub></td>
+        </tr>
+        <tr>
+          <td align="center"><kbd>STA Wardrive</kbd><br><sub>bottom-left</sub></td>
+          <td align="center"><kbd>BLE Scan</kbd><br><sub>bottom-right</sub></td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://img.shields.io/badge/-%F0%9F%91%86-black?style=for-the-badge" alt="icon"/>
+      <br><b>Big Touch<br>Zones</b>
+    </td>
+    <td>
+      <b>25% / 50% / 25%</b> layout (Up / Select / Down) instead of equal thirds<br>
+      Bigger top and bottom zones — easier to hit while driving
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://img.shields.io/badge/-%3E__-black?style=for-the-badge" alt="icon"/>
+      <br><b>CLI Extras</b>
+    </td>
+    <td>
+      <code>listfiles [dir]</code> — list files on SD card<br>
+      <code>readfile &lt;path&gt;</code> — read file contents from SD<br>
+      <code>autocycle</code> — control auto-cycling scan modes<br>
+      <code>brightness</code> — adjust backlight
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://img.shields.io/badge/-%F0%9F%94%A7-black?style=for-the-badge" alt="icon"/>
+      <br><b>V6.1 Fixes</b>
+    </td>
+    <td>
+      Buffer crash when AutoCycle started without SD card<br>
+      Headless mode triggering on every boot (GPIO0 held low by USB reset)<br>
+      Backlight not working after flash (PWM init ordering)
+    </td>
+  </tr>
+</table>
 
 ---
 
