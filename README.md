@@ -39,33 +39,36 @@ Two pre-compiled releases available for Marauder V6.1:
 ### What's in the datboip edition
 
 ```
-┌─────────────────────────────────────────┐
-│          ESP32 Marauder v0.13.6         │
-│            datboip edition              │
-├─────────────────────────────────────────┤
-│                                         │
-│  ┌─────────┐  ┌──────────────────────┐  │
-│  │ WARDRIVE│  │     AUTOCYCLE        │  │
-│  │  (TL)   │  │      (TR)           │  │
-│  └─────────┘  └──────────────────────┘  │
-│                                         │
-│        Tap corners on boot splash       │
-│        to jump straight into a mode     │
-│                                         │
-│  ┌─────────┐  ┌──────────────────────┐  │
-│  │STA WDRV │  │     BLE SCAN        │  │
-│  │  (BL)   │  │      (BR)           │  │
-│  └─────────┘  └──────────────────────┘  │
-│                                         │
-├─────────────────────────────────────────┤
-│  Touch Zones    ▲ UP (25%)              │
-│                 ■ SELECT (50%)          │
-│                 ▼ DOWN (25%)            │
-├─────────────────────────────────────────┤
-│  Brightness     Hold 1.5s → adjust     │
-│  ░░░░░░░░██████████ 100%               │
-│  10 levels, saved to flash              │
-└─────────────────────────────────────────┘
+╔═══════════════════════════════════════════════╗
+║        ESP32 Marauder  ·  datboip edition     ║
+║                    v0.13.6                    ║
+╠═══════════════════════════════════════════════╣
+║                                               ║
+║   BOOT SHORTCUTS (tap during 4s splash)       ║
+║                                               ║
+║   ┌──────────────┐   ┌──────────────────┐     ║
+║   │   WARDRIVE   │   │    AUTOCYCLE     │     ║
+║   │     (TL)     │   │      (TR)        │     ║
+║   └──────────────┘   └──────────────────┘     ║
+║   ┌──────────────┐   ┌──────────────────┐     ║
+║   │  STA WDRIVE  │   │    BLE SCAN     │     ║
+║   │     (BL)     │   │      (BR)        │     ║
+║   └──────────────┘   └──────────────────┘     ║
+║                                               ║
+╠═══════════════════════════════════════════════╣
+║                                               ║
+║   TOUCH LAYOUT          BRIGHTNESS            ║
+║   ┌─────────────┐                             ║
+║   │  ▲ UP  25%  │       Hold any zone 1.5s    ║
+║   ├─────────────┤       to enter adjust mode  ║
+║   │             │                             ║
+║   │ ■ SEL  50% │       ░░░░░░░░░█████ 100%   ║
+║   │             │       10 levels · NVS saved ║
+║   ├─────────────┤                             ║
+║   │  ▼ DN  25%  │                             ║
+║   └─────────────┘                             ║
+║                                               ║
+╚═══════════════════════════════════════════════╝
 ```
 
 **AutoCycle Mode**
@@ -106,8 +109,15 @@ Two pre-compiled releases available for Marauder V6.1:
 
 ### Flashing
 
+**Option 1 — SD card (no computer needed)**
+1. Download `esp32_marauder.ino.bin` from releases above
+2. Rename it to `update.bin`
+3. Copy to the root of your SD card
+4. On the Marauder, go to **Device → Update Firmware** and select the file
+5. It flashes and reboots automatically
+
+**Option 2 — USB**
 ```bash
-# Flash pre-compiled binary (download from releases above)
 esptool.py --port /dev/ttyUSB0 --baud 921600 write_flash 0x10000 esp32_marauder.ino.bin
 ```
 
