@@ -25,54 +25,100 @@
 
 Custom fork of ESP32 Marauder for the V6.1 (LOLIN D32 + ILI9341 touchscreen) with quality-of-life mods for wardriving and daily use. Built on top of [JustCallMeKoko's](https://github.com/justcallmekoko/ESP32Marauder) original firmware.
 
-### What's Different
+### Downloads
 
-**Cyberpunk Boot Splash**
-- Animated boot sequence with border draw-in, typewriter title, magenta underline, circuit traces, and accent lines
-- Made for shits and giggles
-- Credits JustCallMeKoko as original author
+Two pre-compiled releases available for Marauder V6.1:
+
+| Release | Description | Download |
+|---------|-------------|----------|
+| **[datboip edition](https://github.com/datboip/ESP32Marauder/releases/tag/v0.13.6-datboip)** | Full mod package — all features below | [esp32_marauder.ino.bin](https://github.com/datboip/ESP32Marauder/releases/download/v0.13.6-datboip/esp32_marauder.ino.bin) |
+| **[Brightness only](https://github.com/datboip/ESP32Marauder/releases/tag/v0.13.6-brightness)** | Clean PWM brightness add-on for stock firmware | [esp32_marauder.ino.bin](https://github.com/datboip/ESP32Marauder/releases/download/v0.13.6-brightness/esp32_marauder.ino.bin) |
+
+> The **brightness-only** release is a minimal patch on top of upstream — no other changes. It's also submitted as [PR #1142](https://github.com/justcallmekoko/ESP32Marauder/pull/1142) to upstream.
+
+### What's in the datboip edition
+
+```
+┌─────────────────────────────────────────┐
+│          ESP32 Marauder v0.13.6         │
+│            datboip edition              │
+├─────────────────────────────────────────┤
+│                                         │
+│  ┌─────────┐  ┌──────────────────────┐  │
+│  │ WARDRIVE│  │     AUTOCYCLE        │  │
+│  │  (TL)   │  │      (TR)           │  │
+│  └─────────┘  └──────────────────────┘  │
+│                                         │
+│        Tap corners on boot splash       │
+│        to jump straight into a mode     │
+│                                         │
+│  ┌─────────┐  ┌──────────────────────┐  │
+│  │STA WDRV │  │     BLE SCAN        │  │
+│  │  (BL)   │  │      (BR)           │  │
+│  └─────────┘  └──────────────────────┘  │
+│                                         │
+├─────────────────────────────────────────┤
+│  Touch Zones    ▲ UP (25%)              │
+│                 ■ SELECT (50%)          │
+│                 ▼ DOWN (25%)            │
+├─────────────────────────────────────────┤
+│  Brightness     Hold 1.5s → adjust     │
+│  ░░░░░░░░██████████ 100%               │
+│  10 levels, saved to flash              │
+└─────────────────────────────────────────┘
+```
 
 **AutoCycle Mode**
-- Cycles through scan modes automatically: Probe Sniff, Beacon Sniff, AP Scan, Deauth Detect, BLE Scan
-- Fullscreen live status display with current mode, progress bar, timer, step/cycle counters
-- Start from main menu, tap anywhere to stop
-- Also available via CLI: `autocycle -s start/stop/status`
-- Configurable per-mode durations and pause time via CLI
+- Automatically cycles through scan modes: Probe → Beacon → AP → Deauth Detect → BLE
+- Fullscreen live display with current mode, progress bar, timer, step/cycle counters
+- Start from main menu or CLI: `autocycle -s start/stop/status`
+- Configurable per-mode durations and pause time
 
 **PWM Brightness Control**
-- 4-level PWM dimming (25%, 50%, 75%, 100%) instead of binary on/off
-- Saved to flash, persists across reboots
-- Hold top or bottom touch zone for 1.5s to enter brightness mode
-- Also in Device > Brightness menu and CLI: `brightness -c` / `brightness -s 0-3`
+- 10-level PWM dimming (10% steps) instead of binary on/off
+- Persisted to NVS flash across reboots
+- Hold top or bottom touch zone 1.5s on main menu, or Device → Brightness
+- CLI: `brightness -c` (cycle) / `brightness -s <0-9>` (set level)
 
 **Boot Shortcuts**
-- 4 corner buttons on splash screen: Wardrive, AutoCycle, Station Wardrive, BLE Scan
-- Tap any corner during the 4-second boot splash to jump straight into that mode
-- Just power on and go, no menu navigation needed
+- 4 corner tap zones on the splash screen (4s timeout)
+- Top-Left: Wardrive / Top-Right: AutoCycle / Bottom-Left: Station Wardrive / Bottom-Right: BLE Scan
+- Power on and go — no menu navigation needed
 
 **Big Touch Zones**
 - 25% / 50% / 25% layout (Up / Select / Down) instead of equal thirds
-- Bigger top and bottom zones so it's easier to hit while driving
+- Easier to hit while driving
 
-**Fixes for V6.1**
-- Buffer crash when AutoCycle started without SD card (null pointer)
-- Headless mode triggering on every boot (GPIO0 held low by USB reset on V6/V6.1)
-- Backlight not working after flash (PWM init before display init)
+**Extra CLI Commands**
+- `listfiles [dir]` — list files on SD card
+- `readfile <path>` — read file contents from SD
+- `autocycle` — control auto-cycling scan modes
+- `brightness` — adjust backlight
 
-### Building
+**Cyberpunk Boot Splash**
+- Animated boot sequence with border draw-in, typewriter title, circuit traces
+- Credits JustCallMeKoko as original author
 
-```bash
-arduino-cli compile \
-  --fqbn esp32:esp32:d32:PartitionScheme=min_spiffs \
-  --build-property "build.defines=-DMARAUDER_V6_1" \
-  esp32_marauder
-```
+**V6.1 Fixes**
+- Buffer crash when AutoCycle started without SD card
+- Headless mode triggering on every boot (GPIO0 held low by USB reset)
+- Backlight not working after flash (PWM init ordering)
 
 ### Flashing
 
 ```bash
-esptool --port /dev/ttyUSB1 --baud 921600 erase_flash
-esptool --port /dev/ttyUSB1 --baud 921600 write-flash 0x0 build/esp32_marauder.ino.merged.bin
+# Flash pre-compiled binary (download from releases above)
+esptool.py --port /dev/ttyUSB0 --baud 921600 write_flash 0x10000 esp32_marauder.ino.bin
+```
+
+### Building from Source
+
+```bash
+# Uncomment MARAUDER_V6_1 in configs.h (line 17), then:
+arduino-cli compile --fqbn esp32:esp32:d32:PartitionScheme=min_spiffs esp32_marauder/
+
+# Flash
+arduino-cli upload --fqbn esp32:esp32:d32 --port /dev/ttyUSB0 esp32_marauder/
 ```
 
 ---

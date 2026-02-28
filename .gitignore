@@ -1,5 +1,26 @@
+# VS Code
+.vscode/
 
-.vscode/arduino.json
-.vscode/c_cpp_properties.json
-.vscode/settings.json
-esp32_marauder/.vscode/settings.json
+# Build output
+build/
+
+# Environment
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/
+CLAUDE.md
+
+# Python
+*.pyc
+__pycache__/
+
+# Editor
+*.swp
+*.swo
+*~
