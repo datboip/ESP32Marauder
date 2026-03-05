@@ -12,16 +12,7 @@ https://www.online-utility.org/image/convert/to/XBM
   #define Display_h
 #endif
 
-#include <WiFi.h>
-#include "EvilPortal.h"
-#include <Wire.h>
-#include "esp_wifi.h"
-#include "esp_wifi_types.h"
 #include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_system.h"
-#include <Arduino.h>
 
 #ifdef HAS_GPS
   #include "GpsInterface.h"
@@ -113,7 +104,7 @@ AutoCycle auto_cycle_obj;
   xiaoLED xiao_led;
 #elif defined(MARAUDER_M5STICKC) || defined(MARAUDER_M5STICKCP2)
   stickcLED stickc_led;
-#else
+#elif defined(HAS_NEOPIXEL_LED)
   LedInterface led_obj;
 #endif
 
@@ -131,10 +122,23 @@ uint32_t currentTime  = 0;
   #define BL_CHANNEL 0
   #define BL_FREQ 5000
   #define BL_RESOLUTION 8
-  const uint8_t BL_LEVELS[] = {64, 128, 192, 255};
-  const uint8_t BL_NUM_LEVELS = 4;
-  uint8_t bl_level_idx = 3; // default full brightness
+  const uint8_t BL_LEVELS[] = {26, 51, 77, 102, 128, 153, 179, 204, 230, 255};
+  const uint8_t BL_NUM_LEVELS = 10;
+  uint8_t bl_level_idx = 9; // default full brightness
   Preferences bl_prefs;
+#endif
+
+// Helper macros for LEDC API compatibility (2.x vs 3.x board package)
+#ifdef HAS_SCREEN
+  #ifndef HAS_MINI_SCREEN
+    #if ESP_ARDUINO_VERSION_MAJOR >= 3
+      #define BL_SETUP()       ledcAttach(TFT_BL, BL_FREQ, BL_RESOLUTION)
+      #define BL_SET(duty)     ledcWrite(TFT_BL, (duty))
+    #else
+      #define BL_SETUP()       do { ledcSetup(BL_CHANNEL, BL_FREQ, BL_RESOLUTION); ledcAttachPin(TFT_BL, BL_CHANNEL); } while(0)
+      #define BL_SET(duty)     ledcWrite(BL_CHANNEL, (duty))
+    #endif
+  #endif
 #endif
 
 // ============================================================
@@ -142,7 +146,6 @@ uint32_t currentTime  = 0;
 // ============================================================
 #ifdef HAS_SCREEN
 
-// Boot shortcut mode table
 struct BootMode {
   const char* label;
   uint8_t scanMode;
@@ -150,21 +153,18 @@ struct BootMode {
 };
 
 const BootMode BOOT_MODES[] = {
-  {"WARDRIVE",  32, 0x07E0},  // WIFI_SCAN_WAR_DRIVE, green
-  {"AUTOCYCLE",  0, 0xF81F},  // special handle, magenta
-  {"STATION",   33, 0xFDA0},  // WIFI_SCAN_STATION_WAR_DRIVE, orange
-  {"BLE SCAN",  10, 0x001F},  // BT_SCAN_ALL, blue
+  {"WARDRIVE",  32, 0x07E0},
+  {"AUTOCYCLE",  0, 0xF81F},
+  {"STATION",   33, 0xFDA0},
+  {"BLE SCAN",  10, 0x001F},
 };
 
-// Returns: 0=normal, 1-4=boot mode index
 uint8_t drawCyberpunkSplash() {
   TFT_eSPI& tft = display_obj.tft;
-  const uint16_t W = TFT_WIDTH;   // 240
-  const uint16_t H = TFT_HEIGHT;  // 320
+  const uint16_t W = TFT_WIDTH;
+  const uint16_t H = TFT_HEIGHT;
   const uint16_t cx = W / 2;
-  const uint16_t cy = H / 2;      // 160
 
-  // Colors
   const uint16_t CYAN    = 0x07FF;
   const uint16_t MAGENTA = 0xF81F;
   const uint16_t DKCYAN  = 0x0410;
@@ -173,33 +173,24 @@ uint8_t drawCyberpunkSplash() {
   tft.fillScreen(TFT_BLACK);
   backlightOn();
 
-  // === Layout ===
-  // Buttons: 100x50 in each corner, with 4px margin from border
-  const int m = 4;       // outer margin
+  const int m = 4;
   const int btnW = 104;
   const int btnH = 55;
-  const int gap = 6;     // gap between buttons and center
+  const int gap = 6;
 
-  // Button positions (x, y for each corner)
   const uint16_t bx[4] = {
-    (uint16_t)(m + 2),                    // top-left
-    (uint16_t)(W - m - 2 - btnW),         // top-right
-    (uint16_t)(m + 2),                    // bottom-left
-    (uint16_t)(W - m - 2 - btnW)          // bottom-right
+    (uint16_t)(m + 2), (uint16_t)(W - m - 2 - btnW),
+    (uint16_t)(m + 2), (uint16_t)(W - m - 2 - btnW)
   };
   const uint16_t by[4] = {
-    (uint16_t)(m + 2),                    // top-left
-    (uint16_t)(m + 2),                    // top-right
-    (uint16_t)(H - m - 2 - btnH - 8),    // bottom-left (room for timeout bar)
-    (uint16_t)(H - m - 2 - btnH - 8)     // bottom-right
+    (uint16_t)(m + 2), (uint16_t)(m + 2),
+    (uint16_t)(H - m - 2 - btnH - 8), (uint16_t)(H - m - 2 - btnH - 8)
   };
 
-  // Center area for branding: between buttons
   const uint16_t centerTop = by[0] + btnH + gap;
   const uint16_t centerBot = by[2] - gap;
   const uint16_t centerMid = (centerTop + centerBot) / 2;
 
-  // === Phase 1: Border animation ===
   for (int step = 0; step <= 15; step++) {
     float prog = step / 15.0;
     int hLen = (W - m * 2) * prog;
@@ -212,7 +203,6 @@ uint8_t drawCyberpunkSplash() {
   }
   delay(40);
 
-  // === Phase 2: Draw 4 buttons ===
   for (int i = 0; i < 4; i++) {
     uint16_t color = BOOT_MODES[i].color;
     tft.drawRect(bx[i], by[i], btnW, btnH, color);
@@ -222,8 +212,6 @@ uint8_t drawCyberpunkSplash() {
   }
   delay(40);
 
-  // === Phase 3: Center branding ===
-  // Title typewriter
   const uint16_t titleY = centerMid - 30;
   const char* letters = "MARAUDER";
   tft.setTextColor(CYAN, TFT_BLACK);
@@ -240,7 +228,6 @@ uint8_t drawCyberpunkSplash() {
     delay(45);
   }
 
-  // Underline
   for (int step = 0; step <= 10; step++) {
     int hw = 50 * step / 10;
     tft.drawFastHLine(cx - hw, titleY + 20, hw * 2, MAGENTA);
@@ -248,31 +235,26 @@ uint8_t drawCyberpunkSplash() {
   }
   delay(40);
 
-  // Edition
   tft.setTextColor(MAGENTA, TFT_BLACK);
   tft.drawCentreString("datboip edition", cx, titleY + 26, 2);
   delay(50);
 
-  // Version + credit
   tft.setTextColor(DIMGRAY, TFT_BLACK);
   tft.drawCentreString(display_obj.version_number, cx, titleY + 46, 1);
   tft.setTextColor(DKCYAN, TFT_BLACK);
   tft.drawCentreString("by JustCallMeKoko", cx, titleY + 58, 1);
   delay(60);
 
-  // === Phase 4: Timeout bar at very bottom ===
   const uint16_t barX = m + 2;
   const uint16_t barW = W - m * 2 - 4;
   const uint16_t barY = H - m - 5;
   tft.drawRect(barX, barY, barW, 4, DIMGRAY);
 
-  // === Phase 5: Wait for tap or timeout (4 seconds) ===
   uint8_t bootMode = 0;
   uint32_t startWait = millis();
   const uint32_t timeout = 4000;
 
   while (millis() - startWait < timeout) {
-    // Animate timeout bar
     uint32_t elapsed = millis() - startWait;
     uint16_t fillW = (barW - 2) - (uint32_t)(barW - 2) * elapsed / timeout;
     tft.fillRect(barX + 1, barY + 1, fillW, 2, DKCYAN);
@@ -282,11 +264,9 @@ uint8_t drawCyberpunkSplash() {
     if (display_obj.updateTouch(&tx, &ty)) {
       while (display_obj.updateTouch(&tx, &ty)) delay(10);
 
-      // Check which button was tapped
       for (int i = 0; i < 4; i++) {
         if (tx >= bx[i] && tx <= bx[i] + btnW &&
             ty >= by[i] && ty <= by[i] + btnH) {
-          // Highlight button (fill solid)
           uint16_t color = BOOT_MODES[i].color;
           tft.fillRect(bx[i], by[i], btnW, btnH, color);
           tft.setTextColor(TFT_BLACK, color);
@@ -306,59 +286,85 @@ uint8_t drawCyberpunkSplash() {
 }
 #endif
 
-void brightnessInit() {
-  #ifdef HAS_SCREEN
-    ledcAttach(TFT_BL, BL_FREQ, BL_RESOLUTION);
-    bl_prefs.begin("backlight", false);
-    bl_level_idx = bl_prefs.getUChar("level", 3);
-    if (bl_level_idx >= BL_NUM_LEVELS) bl_level_idx = 3;
-    ledcWrite(TFT_BL, BL_LEVELS[bl_level_idx]);
-  #endif
-}
+#ifndef HAS_MINI_SCREEN
+  void brightnessInit() {
+    #ifdef HAS_SCREEN
+      BL_SETUP();
+      bl_prefs.begin("backlight", false);
+      bl_level_idx = bl_prefs.getUChar("level", 9);
+      if (bl_level_idx >= BL_NUM_LEVELS) bl_level_idx = 9;
+      BL_SET(BL_LEVELS[bl_level_idx]);
+    #endif
+  }
 
-void brightnessCycle() {
-  #ifdef HAS_SCREEN
-    bl_level_idx = (bl_level_idx + 1) % BL_NUM_LEVELS;
-    ledcWrite(TFT_BL, BL_LEVELS[bl_level_idx]);
-    bl_prefs.putUChar("level", bl_level_idx);
-    Serial.print(F("[Brightness] Level "));
-    Serial.print(bl_level_idx + 1);
-    Serial.print(F("/"));
-    Serial.print(BL_NUM_LEVELS);
-    Serial.print(F(" ("));
-    Serial.print(BL_LEVELS[bl_level_idx] * 100 / 255);
-    Serial.println(F("%)"));
-  #endif
-}
+  void brightnessCycle() {
+    #ifdef HAS_SCREEN
+      bl_level_idx = (bl_level_idx + 1) % BL_NUM_LEVELS;
+      BL_SET(BL_LEVELS[bl_level_idx]);
+      bl_prefs.putUChar("level", bl_level_idx);
+      Serial.print(F("[Brightness] Level "));
+      Serial.print(bl_level_idx + 1);
+      Serial.print(F("/"));
+      Serial.print(BL_NUM_LEVELS);
+      Serial.print(F(" ("));
+      Serial.print(BL_LEVELS[bl_level_idx] * 100 / 255);
+      Serial.println(F("%)"));
+    #endif
+  }
 
-uint8_t getBrightnessLevel() {
-  #ifdef HAS_SCREEN
-    return bl_level_idx;
-  #else
-    return 0;
-  #endif
-}
+  uint8_t getBrightnessLevel() {
+    #ifdef HAS_SCREEN
+      return bl_level_idx;
+    #else
+      return 0;
+    #endif
+  }
 
-void brightnessSave(uint8_t level) {
-  #ifdef HAS_SCREEN
-    if (level >= BL_NUM_LEVELS) level = BL_NUM_LEVELS - 1;
-    bl_level_idx = level;
-    ledcWrite(TFT_BL, BL_LEVELS[bl_level_idx]);
-    bl_prefs.putUChar("level", bl_level_idx);
-  #endif
-}
+  void brightnessSave(uint8_t level) {
+    #ifdef HAS_SCREEN
+      if (level >= BL_NUM_LEVELS) level = BL_NUM_LEVELS - 1;
+      bl_level_idx = level;
+      BL_SET(BL_LEVELS[bl_level_idx]);
+      bl_prefs.putUChar("level", bl_level_idx);
+    #endif
+  }
 
-void backlightOn() {
-  #ifdef HAS_SCREEN
-    ledcWrite(TFT_BL, BL_LEVELS[bl_level_idx]);
-  #endif
-}
+  void backlightOn() {
+    #ifdef HAS_SCREEN
+      BL_SET(BL_LEVELS[bl_level_idx]);
+    #endif
+  }
 
-void backlightOff() {
-  #ifdef HAS_SCREEN
-    ledcWrite(TFT_BL, 0);
-  #endif
-}
+  void backlightOff() {
+    #ifdef HAS_SCREEN
+      BL_SET(0);
+    #endif
+  }
+#else
+  void backlightOn() {
+    #ifdef HAS_SCREEN
+      #if defined(MARAUDER_MINI) || defined(MARAUDER_MINI_V3)
+        digitalWrite(TFT_BL, LOW);
+      #endif
+    
+      #if !defined(MARAUDER_MINI) && !defined(MARAUDER_MINI_V3)
+        digitalWrite(TFT_BL, HIGH);
+      #endif
+    #endif
+  }
+
+  void backlightOff() {
+    #ifdef HAS_SCREEN
+      #if defined(MARAUDER_MINI) || defined(MARAUDER_MINI_V3)
+        digitalWrite(TFT_BL, HIGH);
+      #endif
+    
+      #if !defined(MARAUDER_MINI) && !defined(MARAUDER_MINI_V3)
+        digitalWrite(TFT_BL, LOW);
+      #endif
+    #endif
+  }
+#endif
 
 #ifdef HAS_C5_SD
   SPIClass sharedSPI(SPI);
@@ -429,9 +435,7 @@ void setup()
   Serial.println("ESP-IDF version is: " + String(esp_get_idf_version()));
 
   #ifdef HAS_PSRAM
-    if (psramInit()) {
-      Serial.println(F("PSRAM is correctly initialized"));
-    } else {
+    if (!psramInit()) {
       Serial.println(F("PSRAM not available"));
     }
   #endif
@@ -451,8 +455,10 @@ void setup()
   #endif
 
   // Init PWM brightness AFTER display init (so ledcAttach overrides TFT_eSPI's pinMode)
-  brightnessInit();
-  backlightOff();
+  #ifndef HAS_MINI_SCREEN
+    brightnessInit();
+    backlightOff();
+  #endif
 
   uint8_t boot_shortcut = 0;
   #ifdef HAS_SCREEN
@@ -478,12 +484,16 @@ void setup()
       if (c_btn.justPressed()) {
         display_obj.headless_mode = true;
         backlightOff();
-        Serial.println(F("Headless Mode enabled"));
       }
     #endif
   #endif
 
   settings_obj.begin();
+
+  if (settings_obj.getSettingType("ChanHop") == "") {
+    Serial.println(F("Current settings format not supported. Installing new default settings..."));
+    settings_obj.createDefaultSettings(SPIFFS);
+  }
 
   buffer_obj = Buffer();
 
@@ -515,7 +525,7 @@ void setup()
     xiao_led.RunSetup();
   #elif defined(MARAUDER_M5STICKC)
     stickc_led.RunSetup();
-  #else
+  #elif defined(HAS_NEOPIXEL_LED)
     led_obj.RunSetup();
   #endif
 
@@ -533,7 +543,6 @@ void setup()
 
   wifi_scan_obj.StartScan(WIFI_SCAN_OFF);
 
-  Serial.println(F("CLI Ready"));
   cli_obj.RunSetup();
 
   // Boot shortcuts: launch mode based on touch during splash
@@ -595,20 +604,12 @@ void loop()
 
   // Update all of our objects
   cli_obj.main(currentTime);
-  #ifdef HAS_SCREEN
-    display_obj.main(wifi_scan_obj.currentScanMode);
-  #endif
   wifi_scan_obj.main(currentTime);
   auto_cycle_obj.main(currentTime);
   // AutoCycle status is CLI-only; no display overlay
 
   #ifdef HAS_GPS
     gps_obj.main();
-  #endif
-  
-  // Detect SD card
-  #if defined(HAS_SD)
-    sd_obj.main();
   #endif
 
   // Save buffer to SD and/or serial
@@ -617,7 +618,6 @@ void loop()
   #ifdef HAS_BATTERY
     battery_obj.main(currentTime);
   #endif
-  settings_obj.main(currentTime);
   if ((wifi_scan_obj.currentScanMode != WIFI_PACKET_MONITOR) ||
       (mini)) {
     #ifdef HAS_SCREEN
@@ -630,7 +630,7 @@ void loop()
     xiao_led.main();
   #elif defined(MARAUDER_M5STICKC)
     stickc_led.main();
-  #else
+  #elif defined(HAS_NEOPIXEL_LED)
     led_obj.main(currentTime);
   #endif
 

@@ -17,7 +17,9 @@
   #include "SDInterface.h"
 #endif
 #include "settings.h"
-#include "LedInterface.h"
+#if defined(HAS_NEOPIXEL_LED)
+  #include "LedInterface.h"
+#endif
 
 #ifdef HAS_SCREEN
   extern MenuFunctions menu_function_obj;
@@ -31,7 +33,9 @@ extern AutoCycle auto_cycle_obj;
   extern SDInterface sd_obj;
 #endif
 extern Settings settings_obj;
-extern LedInterface led_obj;
+#if defined(HAS_NEOPIXEL_LED)
+  extern LedInterface led_obj;
+#endif
 extern LinkedList<AccessPoint>* access_points;
 extern LinkedList<AirTag>* airtags;
 extern LinkedList<ssid>* ssids;
@@ -72,7 +76,6 @@ const char PROGMEM SNIFF_PROBE_CMD[] = "sniffprobe";
 const char PROGMEM SNIFF_PWN_CMD[] = "sniffpwn";
 const char PROGMEM SNIFF_PINESCAN_CMD[] = "sniffpinescan";
 const char PROGMEM SNIFF_MULTISSID_CMD[] = "sniffmultissid";
-const char PROGMEM SNIFF_ESP_CMD[] = "sniffesp";
 const char PROGMEM SNIFF_DEAUTH_CMD[] = "sniffdeauth";
 const char PROGMEM SNIFF_PMKID_CMD[] = "sniffpmkid";
 const char PROGMEM STOPSCAN_CMD[] = "stopscan";
@@ -93,6 +96,8 @@ const char PROGMEM ATTACK_TYPE_RR[] = "rickroll";
 const char PROGMEM ATTACK_TYPE_BM[] = "badmsg";
 const char PROGMEM ATTACK_TYPE_S[] = "sleep";
 const char PROGMEM ATTACK_TYPE_SAE[] = "sae";
+const char PROGMEM ATTACK_TYPE_CSA[] = "csa";
+const char PROGMEM ATTACK_TYPE_QUIET[] = "quiet";
 
 // WiFi Aux
 const char PROGMEM LIST_AP_CMD[] = "list";
@@ -106,15 +111,12 @@ const char PROGMEM MAC_CMD_A[] = "randapmac";
 const char PROGMEM MAC_CMD_B[] = "randstamac";
 const char PROGMEM MAC_CMD_C[] = "cloneapmac";
 const char PROGMEM MAC_CMD_D[] = "clonestamac";
+const char PROGMEM ADD_CMD[] = "add";
 
 // Bluetooth sniff/scan
 const char PROGMEM BT_SPAM_CMD[] = "blespam";
 const char PROGMEM BT_SNIFF_CMD[] = "sniffbt";
 const char PROGMEM BT_SPOOFAT_CMD[] = "spoofat";
-//const char PROGMEM BT_SOUR_APPLE_CMD[] = "sourapple";
-//const char PROGMEM BT_SWIFTPAIR_SPAM_CMD[] = "swiftpair";
-//const char PROGMEM BT_SAMSUNG_SPAM_CMD[] = "samsungblespam";
-//onst char PROGMEM BT_SPAM_ALL_CMD[] = "btspamall";
 const char PROGMEM BT_WARDRIVE_CMD[] = "btwardrive";
 const char PROGMEM BT_SKIM_CMD[] = "sniffskim";
 
@@ -157,7 +159,6 @@ const char PROGMEM HELP_SNIFF_PROBE_CMD[] = "sniffprobe";
 const char PROGMEM HELP_SNIFF_PWN_CMD[] = "sniffpwn";
 const char PROGMEM HELP_SNIFF_PINESCAN_CMD[] = "sniffpinescan";
 const char PROGMEM HELP_SNIFF_MULTISSID_CMD[] = "sniffmultissid";
-const char PROGMEM HELP_SNIFF_ESP_CMD[] = "sniffesp";
 const char PROGMEM HELP_SNIFF_DEAUTH_CMD[] = "sniffdeauth";
 const char PROGMEM HELP_SNIFF_PMKID_CMD[] = "sniffpmkid [-c <channel>][-d][-l]";
 const char PROGMEM HELP_STOPSCAN_CMD[] = "stopscan [-f]";
@@ -169,7 +170,7 @@ const char PROGMEM HELP_MAC_TRACK_CMD[] = "mactrack";
 const char PROGMEM HELP_SNIFF_SAE_CMD[] = "sniffsae";
 
 // WiFi attack
-const char PROGMEM HELP_ATTACK_CMD[] = "attack -t <sae/beacon [-l/-r/-a]/deauth [-c]/[-s <src mac>] [-d <dst mac>]/probe/rickroll/badmsg [-c]/sleep [-c]>";
+const char PROGMEM HELP_ATTACK_CMD[] = "attack -t <quiet/csa/sae/beacon [-l/-r/-a]/deauth [-c]/[-s <src mac>] [-d <dst mac>]/probe/rickroll/badmsg [-c]/sleep [-c]>";
 
 // WiFi Aux
 const char PROGMEM HELP_LIST_AP_CMD_A[] = "list -s";
@@ -189,9 +190,11 @@ const char PROGMEM HELP_MAC_CMD_A[] = "randapmac";
 const char PROGMEM HELP_MAC_CMD_B[] = "randstamac";
 const char PROGMEM HELP_MAC_CMD_C[] = "cloneapmac [-a <index>]";
 const char PROGMEM HELP_MAC_CMD_D[] = "clonestamac [-s <index>]";
+const char PROGMEM HELP_ADD_CMD_A[] = "add -a -b <mac> [-ch <channel>] [-e <ssid>]";
+const char PROGMEM HELP_ADD_CMD_B[] = "add -c -b <mac> -ap <ap_index>";
 
 // Bluetooth sniff/scan
-const char PROGMEM HELP_BT_SNIFF_CMD[] = "sniffbt [-t] <airtag/flipper/flock>";
+const char PROGMEM HELP_BT_SNIFF_CMD[] = "sniffbt [-t] <airtag/flipper/flock/meta>";
 const char PROGMEM HELP_BT_SPAM_CMD[] = "blespam -t <apple/google/samsung/windows/flipper/all>";
 const char PROGMEM HELP_BT_SPOOFAT_CMD[] = "spoofat -t <index>";
 //const char PROGMEM HELP_BT_SOUR_APPLE_CMD[] = "sourapple";
@@ -201,8 +204,7 @@ const char PROGMEM HELP_BT_SPOOFAT_CMD[] = "spoofat -t <index>";
 const char PROGMEM HELP_BT_WARDRIVE_CMD[] = "btwardrive";
 const char PROGMEM HELP_BT_SKIM_CMD[] = "sniffskim";
 
-// Brightness
-const char PROGMEM HELP_BRIGHTNESS_CMD[] = "brightness [-c cycle] [-s <0-3>]";
+const char PROGMEM HELP_BRIGHTNESS_CMD[] = "brightness [-c cycle] [-s <0-9>]";
 
 // AutoCycle + SD
 const char PROGMEM HELP_AUTOCYCLE_CMD[] = "autocycle [-s start/stop/status] [-t <mode_index> <seconds>] [-p <pause_seconds>]";
@@ -220,10 +222,11 @@ class CommandLine {
     void runCommand(String input);
     bool checkValueExists(LinkedList<String>* cmd_args_list, int index);
     bool inRange(int max, int index);
-    bool apSelected();
+    //bool apSelected();
     bool hasSSIDs();
     void showCounts(int selected, int unselected = -1);
     int argSearch(LinkedList<String>* cmd_args, String key);
+    void startScanFromCLI(int scan_mode, uint16_t color, String scan_name);
 
     const char* ascii_art =
     "\r\n"
@@ -253,7 +256,6 @@ class CommandLine {
     "\r\n";
         
   public:
-    CommandLine();
 
     void RunSetup();
     void main(uint32_t currentTime);
