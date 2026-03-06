@@ -38,6 +38,7 @@ https://www.online-utility.org/image/convert/to/XBM
 #include "settings.h"
 #include "CommandLine.h"
 #include "AutoCycle.h"
+#include "Sentinel.h"
 #include "lang_var.h"
 
 #ifdef HAS_BATTERY
@@ -76,6 +77,7 @@ Buffer buffer_obj;
 Settings settings_obj;
 CommandLine cli_obj;
 AutoCycle auto_cycle_obj;
+Sentinel sentinel_obj;
 
 #ifdef HAS_GPS
   GpsInterface gps_obj;
@@ -156,7 +158,7 @@ const BootMode BOOT_MODES[] = {
   {"WARDRIVE",  32, 0x07E0},
   {"AUTOCYCLE",  0, 0xF81F},
   {"STATION",   33, 0xFDA0},
-  {"BLE SCAN",  10, 0x001F},
+  {"RECON",      0, 0x07FF},
 };
 
 uint8_t drawCyberpunkSplash() {
@@ -545,6 +547,8 @@ void setup()
 
   cli_obj.RunSetup();
 
+  sentinel_obj.begin();
+
   // Boot shortcuts: launch mode based on touch during splash
   #ifdef HAS_SCREEN
     if (boot_shortcut == 1) {
@@ -565,11 +569,11 @@ void setup()
       menu_function_obj.drawStatusBar();
       wifi_scan_obj.StartScan(WIFI_SCAN_STATION_WAR_DRIVE, TFT_ORANGE);
     } else if (boot_shortcut == 4) {
-      // BLE Scan
-      Serial.println(F("[Boot] BLE Scan shortcut"));
-      display_obj.clearScreen();
-      menu_function_obj.drawStatusBar();
-      wifi_scan_obj.StartScan(BT_SCAN_ALL, TFT_BLUE);
+      // Recon Mode (stationary autocycle: station, probe, beacon, wardrive)
+      Serial.println(F("[Boot] Recon mode shortcut"));
+      auto_cycle_obj.loadRecon();
+      auto_cycle_obj.start();
+      menu_function_obj.drawAutoCycleStatus();
     }
   #endif
 }
@@ -606,6 +610,7 @@ void loop()
   cli_obj.main(currentTime);
   wifi_scan_obj.main(currentTime);
   auto_cycle_obj.main(currentTime);
+  sentinel_obj.main(currentTime);
   // AutoCycle status is CLI-only; no display overlay
 
   #ifdef HAS_GPS
