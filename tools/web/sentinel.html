@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marauder Sentinel - Web Flasher & Configurator</title>
+<script src="https://unpkg.com/esptool-js@0.4.3/bundle.js"></script>
+<style>
+  :root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --border: #30363d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --accent-cyan: #00e5ff;
+    --accent-green: #39d353;
+    --accent-red: #f85149;
+    --accent-yellow: #d29922;
+    --font-mono: 'Courier New', Consolas, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent-cyan);
+    letter-spacing: 1px;
+  }
+
+  header h1 span {
+    color: var(--text-secondary);
+    font-weight: 400;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .status-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent-red);
+  }
+
+  .status-indicator.connected {
+    background: var(--accent-green);
+  }
+
+  .status-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .btn {
+    padding: 6px 16px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .btn:hover { background: var(--border); }
+
+  .btn-primary {
+    background: var(--accent-cyan);
+    color: var(--bg-primary);
+    border-color: var(--accent-cyan);
+    font-weight: 600;
+  }
+
+  .btn-primary:hover { background: #00c8e0; border-color: #00c8e0; }
+
+  .btn-danger {
+    background: var(--accent-red);
+    color: #fff;
+    border-color: var(--accent-red);
+  }
+
+  .btn-danger:hover { background: #d63a33; }
+
+  .btn-success {
+    background: var(--accent-green);
+    color: var(--bg-primary);
+    border-color: var(--accent-green);
+    font-weight: 600;
+  }
+
+  .btn-success:hover { background: #2db844; }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .tabs {
+    display: flex;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+  }
+
+  .tab {
+    padding: 10px 20px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    user-select: none;
+  }
+
+  .tab:hover { color: var(--text-primary); }
+
+  .tab.active {
+    color: var(--accent-cyan);
+    border-bottom-color: var(--accent-cyan);
+  }
+
+  .tab.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  .tab-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: none;
+  }
+
+  .tab-content.active { display: block; }
+
+  .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .card h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--accent-cyan);
+  }
+
+  .card h3 {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .form-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .form-row label {
+    min-width: 160px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .form-row input, .form-row select {
+    flex: 1;
+    padding: 6px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 13px;
+  }
+
+  .form-row input:focus, .form-row select:focus {
+    outline: none;
+    border-color: var(--accent-cyan);
+  }
+
+  input[type="file"] {
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  input[type="file"]::file-selector-button {
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    cursor: pointer;
+    margin-right: 8px;
+  }
+
+  .progress-container {
+    margin-top: 16px;
+    display: none;
+  }
+
+  .progress-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-primary);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--accent-cyan);
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  .progress-text {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+  }
+
+  /* WiFi table */
+  .wifi-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 12px;
+  }
+
+  .wifi-table th {
+    text-align: left;
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .wifi-table td {
+    padding: 4px 8px;
+  }
+
+  .wifi-table input {
+    width: 100%;
+    padding: 4px 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 13px;
+  }
+
+  .wifi-table input:focus {
+    outline: none;
+    border-color: var(--accent-cyan);
+  }
+
+  .wifi-table input[type="number"] { width: 60px; }
+
+  .btn-small {
+    padding: 3px 10px;
+    font-size: 12px;
+  }
+
+  .button-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  /* Console */
+  .console-output {
+    width: 100%;
+    height: calc(100vh - 260px);
+    min-height: 300px;
+    background: #000;
+    color: var(--accent-green);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.5;
+  }
+
+  .console-input-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .console-input-row input {
+    flex: 1;
+    padding: 8px 12px;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--accent-green);
+    font-family: var(--font-mono);
+    font-size: 13px;
+  }
+
+  .console-input-row input:focus {
+    outline: none;
+    border-color: var(--accent-cyan);
+  }
+
+  .warning-banner {
+    background: #3d2a00;
+    border: 1px solid var(--accent-yellow);
+    color: var(--accent-yellow);
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    font-size: 13px;
+  }
+
+  .info-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+
+  .flash-log {
+    margin-top: 12px;
+    padding: 10px;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    header { padding: 10px 16px; }
+    .tabs { padding: 0 8px; }
+    .tab { padding: 8px 12px; font-size: 13px; }
+    .tab-content { padding: 16px; }
+    .form-row { flex-direction: column; align-items: stretch; }
+    .form-row label { min-width: unset; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MARAUDER SENTINEL <span>// Web Tool</span></h1>
+  <div class="status-bar">
+    <div class="status-indicator" id="statusDot"></div>
+    <span class="status-text" id="statusText">Disconnected</span>
+    <button class="btn" id="btnConnect" onclick="toggleConnection()">Connect</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-tab="flash" onclick="switchTab('flash')">Flash</div>
+  <div class="tab" data-tab="configure" onclick="switchTab('configure')">Configure</div>
+  <div class="tab" data-tab="certs" onclick="switchTab('certs')">Certs</div>
+  <div class="tab" data-tab="console" onclick="switchTab('console')">Console</div>
+</div>
+
+<div id="browserWarning" class="tab-content" style="display:none">
+  <div class="warning-banner">
+    Web Serial API is not supported in this browser. Please use Chrome 89+ or Edge 89+ to use this tool.
+  </div>
+</div>
+
+<!-- Flash Tab -->
+<div id="tab-flash" class="tab-content active">
+  <div class="card">
+    <h2>Flash Firmware</h2>
+    <p class="info-text">
+      Select a compiled .bin firmware file and flash it to your ESP32 device over USB.
+      The device will be reset into bootloader mode automatically.
+    </p>
+    <div class="form-row">
+      <label>Firmware Binary</label>
+      <input type="file" id="firmwareFile" accept=".bin">
+    </div>
+    <div class="form-row">
+      <label>Flash Offset</label>
+      <input type="text" id="flashOffset" value="0x10000" style="max-width:120px">
+    </div>
+    <div class="button-row">
+      <button class="btn btn-primary" id="btnFlash" onclick="startFlash()" disabled>Flash Firmware</button>
+    </div>
+    <div class="progress-container" id="flashProgress">
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="flashProgressBar"></div>
+      </div>
+      <div class="progress-text" id="flashProgressText">Preparing...</div>
+    </div>
+    <div class="flash-log" id="flashLog"></div>
+  </div>
+</div>
+
+<!-- Configure Tab -->
+<div id="tab-configure" class="tab-content">
+  <div class="card">
+    <h2>WiFi Networks</h2>
+    <p class="info-text">
+      Configure WiFi networks for the device. Networks are tried in priority order (lowest number first).
+    </p>
+    <table class="wifi-table" id="wifiTable">
+      <thead>
+        <tr>
+          <th style="width:70px">Priority</th>
+          <th>SSID</th>
+          <th>Password</th>
+          <th style="width:50px"></th>
+        </tr>
+      </thead>
+      <tbody id="wifiTableBody">
+      </tbody>
+    </table>
+    <div class="button-row">
+      <button class="btn" onclick="addWifiRow()">+ Add Network</button>
+      <button class="btn btn-primary" onclick="saveWifiNetworks()" id="btnSaveWifi" disabled>Save to Device</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Sentinel Settings</h2>
+    <div class="form-row">
+      <label>Device Name</label>
+      <input type="text" id="cfgDeviceName" placeholder="my-marauder-01">
+    </div>
+    <div class="form-row">
+      <label>API URL</label>
+      <input type="text" id="cfgApiUrl" placeholder="https://sentinel.example.com/api">
+    </div>
+    <div class="form-row">
+      <label>API Key</label>
+      <input type="text" id="cfgApiKey" placeholder="your-api-key">
+    </div>
+    <div class="form-row">
+      <label>Phone Home Interval (min)</label>
+      <input type="number" id="cfgInterval" value="5" min="1" max="1440">
+    </div>
+    <div class="form-row">
+      <label>Dead Man's Timeout (hrs)</label>
+      <input type="number" id="cfgTimeout" value="24" min="1" max="720">
+    </div>
+    <div class="button-row">
+      <button class="btn btn-primary" onclick="applySettings()" id="btnApplySettings" disabled>Apply Settings</button>
+      <button class="btn btn-success" onclick="sendCommand('sentinel -s start')" id="btnStartSentinel" disabled>Start Sentinel</button>
+      <button class="btn btn-danger" onclick="sendCommand('sentinel -s stop')" id="btnStopSentinel" disabled>Stop Sentinel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Certs Tab -->
+<div id="tab-certs" class="tab-content">
+  <div class="card">
+    <h2>Client Certificates (mTLS)</h2>
+    <p class="info-text">
+      Upload a client certificate and private key for mutual TLS authentication with the Sentinel server.
+      This ensures the device can prove its identity when communicating with the API, and the server
+      can verify the device is authorized.
+    </p>
+    <div class="form-row">
+      <label>Client Certificate (.pem)</label>
+      <input type="file" id="certFile" accept=".pem,.crt">
+    </div>
+    <div class="form-row">
+      <label>Private Key (.pem)</label>
+      <input type="file" id="keyFile" accept=".pem,.key">
+    </div>
+    <div class="button-row">
+      <button class="btn btn-primary" onclick="uploadCerts()" disabled>Upload to Device</button>
+    </div>
+    <div class="warning-banner" style="margin-top:16px">
+      Certificate upload is coming soon. This feature requires SPIFFS file transfer support
+      which is not yet implemented in the serial protocol.
+    </div>
+  </div>
+</div>
+
+<!-- Console Tab -->
+<div id="tab-console" class="tab-content">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+    <h3 style="color:var(--text-secondary); font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">
+      Serial Console
+    </h3>
+    <button class="btn btn-small" onclick="clearConsole()">Clear</button>
+  </div>
+  <div class="console-output" id="consoleOutput"></div>
+  <div class="console-input-row">
+    <input type="text" id="consoleInput" placeholder="Type a command..." onkeydown="if(event.key==='Enter')sendConsoleCommand()">
+    <button class="btn btn-primary" onclick="sendConsoleCommand()" id="btnSendCmd" disabled>Send</button>
+  </div>
+</div>
+
+<script>
+  // --- State ---
+  let port = null;
+  let reader = null;
+  let writer = null;
+  let readLoopActive = false;
+  let isFlashing = false;
+
+  // --- Web Serial check ---
+  (function checkSerial() {
+    if (!('serial' in navigator)) {
+      document.getElementById('browserWarning').style.display = 'block';
+      document.querySelectorAll('.tab-content').forEach(function(el) {
+        if (el.id !== 'browserWarning') el.style.display = 'none';
+      });
+      document.querySelectorAll('.tab').forEach(function(el) { el.classList.add('disabled'); });
+      document.getElementById('btnConnect').disabled = true;
+    }
+  })();
+
+  // --- Initialize first WiFi row ---
+  (function initWifi() {
+    addWifiRow();
+  })();
+
+  // --- Tab switching ---
+  function switchTab(name) {
+    if (isFlashing && name !== 'flash') return;
+    document.querySelectorAll('.tab').forEach(function(t) {
+      t.classList.toggle('active', t.dataset.tab === name);
+    });
+    document.querySelectorAll('.tab-content').forEach(function(tc) {
+      tc.classList.toggle('active', tc.id === 'tab-' + name);
+    });
+  }
+
+  // --- Connection ---
+  async function toggleConnection() {
+    if (port) {
+      await disconnect();
+    } else {
+      await connect();
+    }
+  }
+
+  async function connect() {
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      updateConnectionUI(true);
+      startReading();
+    } catch (e) {
+      appendConsole('[Error] ' + e.message + '\n');
+      port = null;
+      updateConnectionUI(false);
+    }
+  }
+
+  async function disconnect() {
+    readLoopActive = false;
+    try {
+      if (reader) {
+        await reader.cancel();
+        reader.releaseLock();
+        reader = null;
+      }
+      if (port) {
+        await port.close();
+      }
+    } catch (e) {
+      // ignore close errors
+    }
+    port = null;
+    updateConnectionUI(false);
+  }
+
+  function updateConnectionUI(connected) {
+    var dot = document.getElementById('statusDot');
+    var text = document.getElementById('statusText');
+    var btn = document.getElementById('btnConnect');
+    dot.classList.toggle('connected', connected);
+    text.textContent = connected ? 'Connected' : 'Disconnected';
+    btn.textContent = connected ? 'Disconnect' : 'Connect';
+
+    // Enable/disable serial-dependent buttons
+    var serialBtns = ['btnFlash', 'btnSaveWifi', 'btnApplySettings',
+                      'btnStartSentinel', 'btnStopSentinel', 'btnSendCmd'];
+    serialBtns.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.disabled = !connected;
+    });
+  }
+
+  async function startReading() {
+    if (!port || !port.readable) return;
+    readLoopActive = true;
+    var decoder = new TextDecoder();
+    while (readLoopActive && port && port.readable) {
+      try {
+        reader = port.readable.getReader();
+        while (readLoopActive) {
+          var result = await reader.read();
+          if (result.done) break;
+          if (result.value) {
+            appendConsole(decoder.decode(result.value));
+          }
+        }
+        reader.releaseLock();
+        reader = null;
+      } catch (e) {
+        if (readLoopActive) {
+          appendConsole('[Serial read error] ' + e.message + '\n');
+        }
+        try { reader.releaseLock(); } catch (_) {}
+        reader = null;
+        break;
+      }
+    }
+    // If we exited unexpectedly, update UI
+    if (readLoopActive) {
+      readLoopActive = false;
+      port = null;
+      updateConnectionUI(false);
+    }
+  }
+
+  // --- Console ---
+  function appendConsole(text) {
+    var el = document.getElementById('consoleOutput');
+    el.textContent += text;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function clearConsole() {
+    document.getElementById('consoleOutput').textContent = '';
+  }
+
+  async function sendCommand(cmd) {
+    if (!port || !port.writable) {
+      appendConsole('[Error] Not connected\n');
+      return;
+    }
+    try {
+      var w = port.writable.getWriter();
+      var encoder = new TextEncoder();
+      await w.write(encoder.encode(cmd + '\n'));
+      w.releaseLock();
+      appendConsole('> ' + cmd + '\n');
+    } catch (e) {
+      appendConsole('[Send error] ' + e.message + '\n');
+    }
+  }
+
+  function sendConsoleCommand() {
+    var input = document.getElementById('consoleInput');
+    var cmd = input.value.trim();
+    if (!cmd) return;
+    sendCommand(cmd);
+    input.value = '';
+  }
+
+  // --- Flash ---
+  function flashLog(msg) {
+    var el = document.getElementById('flashLog');
+    el.style.display = 'block';
+    el.textContent += msg + '\n';
+    el.scrollTop = el.scrollHeight;
+  }
+
+  async function startFlash() {
+    var fileInput = document.getElementById('firmwareFile');
+    if (!fileInput.files.length) {
+      alert('Please select a firmware .bin file.');
+      return;
+    }
+    if (!port) {
+      alert('Please connect to a device first.');
+      return;
+    }
+
+    var file = fileInput.files[0];
+    var offset = parseInt(document.getElementById('flashOffset').value, 16) || 0x10000;
+    var progressContainer = document.getElementById('flashProgress');
+    var progressBar = document.getElementById('flashProgressBar');
+    var progressText = document.getElementById('flashProgressText');
+    var logEl = document.getElementById('flashLog');
+
+    logEl.textContent = '';
+    logEl.style.display = 'block';
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '0%';
+    progressText.textContent = 'Reading firmware file...';
+
+    // Lock UI
+    isFlashing = true;
+    setFlashingUI(true);
+
+    try {
+      // Stop the read loop so ESPTool can use the port
+      readLoopActive = false;
+      if (reader) {
+        await reader.cancel();
+        reader.releaseLock();
+        reader = null;
+      }
+
+      var contents = await file.arrayBuffer();
+      var firmwareData = new Uint8Array(contents);
+      flashLog('Firmware size: ' + firmwareData.length + ' bytes');
+      flashLog('Flash offset: 0x' + offset.toString(16));
+
+      progressText.textContent = 'Connecting to bootloader...';
+
+      // Use ESPTool.js
+      var transport = new esptool.Transport(port);
+      var loader = new esptool.ESPLoader({
+        transport: transport,
+        baudrate: 115200,
+        romBaudrate: 115200,
+        terminal: {
+          clean: function() {},
+          writeLine: function(data) { flashLog(data); },
+          write: function(data) { flashLog(data); }
+        }
+      });
+
+      await loader.main();
+      flashLog('Connected. Chip: ' + (loader.chipName || 'unknown'));
+      progressText.textContent = 'Erasing and writing flash...';
+
+      var flashOptions = {
+        fileArray: [{ data: binaryToString(firmwareData), address: offset }],
+        flashSize: 'keep',
+        flashMode: 'keep',
+        flashFreq: 'keep',
+        eraseAll: false,
+        compress: true,
+        reportProgress: function(fileIndex, written, total) {
+          var pct = Math.round((written / total) * 100);
+          progressBar.style.width = pct + '%';
+          progressText.textContent = 'Writing... ' + pct + '% (' + written + ' / ' + total + ' bytes)';
+        }
+      };
+
+      await loader.writeFlash(flashOptions);
+
+      progressBar.style.width = '100%';
+      progressText.textContent = 'Flash complete! Resetting device...';
+      flashLog('Flash complete.');
+
+      try { await loader.hardReset(); } catch (_) {}
+
+    } catch (e) {
+      flashLog('[Flash error] ' + e.message);
+      progressText.textContent = 'Flash failed: ' + e.message;
+    } finally {
+      isFlashing = false;
+      setFlashingUI(false);
+      // Restart reading
+      if (port && port.readable) {
+        startReading();
+      }
+    }
+  }
+
+  function binaryToString(uint8arr) {
+    var str = '';
+    for (var i = 0; i < uint8arr.length; i++) {
+      str += String.fromCharCode(uint8arr[i]);
+    }
+    return str;
+  }
+
+  function setFlashingUI(flashing) {
+    document.getElementById('btnFlash').disabled = flashing || !port;
+    document.querySelectorAll('.tab').forEach(function(t) {
+      if (t.dataset.tab !== 'flash') {
+        t.classList.toggle('disabled', flashing);
+      }
+    });
+  }
+
+  // --- WiFi Networks ---
+  function createWifiRow(priority) {
+    var tr = document.createElement('tr');
+
+    var tdPriority = document.createElement('td');
+    var inputPriority = document.createElement('input');
+    inputPriority.type = 'number';
+    inputPriority.value = priority;
+    inputPriority.min = '1';
+    inputPriority.max = '99';
+    tdPriority.appendChild(inputPriority);
+    tr.appendChild(tdPriority);
+
+    var tdSsid = document.createElement('td');
+    var inputSsid = document.createElement('input');
+    inputSsid.type = 'text';
+    inputSsid.placeholder = 'Network name';
+    tdSsid.appendChild(inputSsid);
+    tr.appendChild(tdSsid);
+
+    var tdPassword = document.createElement('td');
+    var inputPassword = document.createElement('input');
+    inputPassword.type = 'text';
+    inputPassword.placeholder = 'Password';
+    tdPassword.appendChild(inputPassword);
+    tr.appendChild(tdPassword);
+
+    var tdAction = document.createElement('td');
+    var btnRemove = document.createElement('button');
+    btnRemove.className = 'btn btn-small btn-danger';
+    btnRemove.textContent = 'X';
+    btnRemove.addEventListener('click', function() { removeWifiRow(btnRemove); });
+    tdAction.appendChild(btnRemove);
+    tr.appendChild(tdAction);
+
+    return tr;
+  }
+
+  function addWifiRow() {
+    var tbody = document.getElementById('wifiTableBody');
+    var rows = tbody.querySelectorAll('tr');
+    var nextPriority = rows.length + 1;
+    tbody.appendChild(createWifiRow(nextPriority));
+  }
+
+  function removeWifiRow(btn) {
+    var tbody = document.getElementById('wifiTableBody');
+    if (tbody.querySelectorAll('tr').length <= 1) return;
+    btn.closest('tr').remove();
+  }
+
+  async function saveWifiNetworks() {
+    var rows = document.getElementById('wifiTableBody').querySelectorAll('tr');
+    var networks = [];
+    rows.forEach(function(row) {
+      var inputs = row.querySelectorAll('input');
+      var priority = inputs[0].value.trim();
+      var ssid = inputs[1].value.trim();
+      var password = inputs[2].value.trim();
+      if (ssid) {
+        networks.push({ priority: parseInt(priority) || 1, ssid: ssid, password: password });
+      }
+    });
+
+    if (networks.length === 0) {
+      alert('Please enter at least one WiFi network.');
+      return;
+    }
+
+    networks.sort(function(a, b) { return a.priority - b.priority; });
+
+    appendConsole('[Config] Sending WiFi networks...\n');
+
+    for (var i = 0; i < networks.length; i++) {
+      var n = networks[i];
+      await sendCommand('sentinel -w ' + n.priority + ',' + n.ssid + ',' + n.password);
+      await delay(200);
+    }
+
+    appendConsole('[Config] WiFi networks saved.\n');
+  }
+
+  // --- Sentinel Settings ---
+  async function applySettings() {
+    var name = document.getElementById('cfgDeviceName').value.trim();
+    var url = document.getElementById('cfgApiUrl').value.trim();
+    var key = document.getElementById('cfgApiKey').value.trim();
+    var interval = document.getElementById('cfgInterval').value.trim();
+    var timeout = document.getElementById('cfgTimeout').value.trim();
+
+    appendConsole('[Config] Applying sentinel settings...\n');
+
+    if (name) { await sendCommand('sentinel -n ' + name); await delay(200); }
+    if (url) { await sendCommand('sentinel -u ' + url); await delay(200); }
+    if (key) { await sendCommand('sentinel -a ' + key); await delay(200); }
+    if (interval) { await sendCommand('sentinel -i ' + interval); await delay(200); }
+    if (timeout) { await sendCommand('sentinel -d ' + timeout); await delay(200); }
+
+    appendConsole('[Config] Settings applied.\n');
+  }
+
+  // --- Certs (placeholder) ---
+  function uploadCerts() {
+    alert('Certificate upload is coming soon.');
+  }
+
+  // --- Utility ---
+  function delay(ms) {
+    return new Promise(function(resolve) { setTimeout(resolve, ms); });
+  }
+
+  // Handle serial disconnect event
+  if ('serial' in navigator) {
+    navigator.serial.addEventListener('disconnect', function(e) {
+      if (port && e.target === port) {
+        readLoopActive = false;
+        port = null;
+        reader = null;
+        updateConnectionUI(false);
+        appendConsole('[Disconnected] Device was removed.\n');
+      }
+    });
+  }
+</script>
+
+</body>
+</html>
