@@ -4,9 +4,19 @@
 
 #include <WiFi.h>
 #include <esp_wifi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 
 #ifdef HAS_SD
   #include "SD.h"
+#endif
+
+#ifdef HAS_BATTERY
+  #include "BatteryInterface.h"
+#endif
+
+#ifdef HAS_GPS
+  #include "GpsInterface.h"
 #endif
 
 extern WiFiScan wifi_scan_obj;
@@ -352,37 +362,277 @@ void Sentinel::wipeAll() {
   setState(SENTINEL_IDLE);
 }
 
-// === STUB METHODS (implemented in Task 3) ===
+// === HTTP METHODS ===
 
 bool Sentinel::uploadFile(String filepath) {
-  // TODO: implement HTTP upload
+#ifdef HAS_SD
+  File f = SD.open(filepath, FILE_READ);
+  if (!f) {
+    Serial.print(F("[Sentinel] Failed to open: "));
+    Serial.println(filepath);
+    return false;
+  }
+
+  size_t fileSize = f.size();
+  if (fileSize == 0) {
+    f.close();
+    return true;  // skip empty files
+  }
+
+  HTTPClient http;
+  String url = api_url + "/api/upload";
+
+  http.begin(url);
+  http.addHeader("Content-Type", "application/octet-stream");
+  http.addHeader("X-Device-Id", device_id);
+  http.addHeader("X-Device-Name", device_name);
+  http.addHeader("X-Filename", filepath);
+  if (api_key.length() > 0)
+    http.addHeader("X-API-Key", api_key);
+
+  Serial.print(F("[Sentinel] Uploading: "));
+  Serial.print(filepath);
+  Serial.print(F(" ("));
+  Serial.print(fileSize);
+  Serial.println(F(" bytes)"));
+
+  int httpCode = http.sendRequest("POST", &f, fileSize);
+  f.close();
+  http.end();
+
+  if (httpCode == 200 || httpCode == 201) {
+    Serial.println(F("[Sentinel] Upload OK"));
+    return true;
+  }
+
+  Serial.print(F("[Sentinel] Upload failed, HTTP "));
+  Serial.println(httpCode);
   return false;
+#else
+  return false;
+#endif
 }
 
 bool Sentinel::uploadAllFiles() {
-  // TODO: implement bulk upload
+#ifdef HAS_SD
+  bool anyUploaded = false;
+  File root = SD.open("/");
+  if (!root) {
+    Serial.println(F("[Sentinel] Failed to open SD root"));
+    return false;
+  }
+
+  // Collect filenames first (avoid modifying dir while iterating)
+  String files[32];
+  int fileCount = 0;
+
+  File entry = root.openNextFile();
+  while (entry && fileCount < 32) {
+    String name = String("/") + entry.name();
+    size_t sz = entry.size();
+    entry.close();
+
+    if (sz > 0 && (name.endsWith(".log") || name.endsWith(".gpx"))) {
+      files[fileCount++] = name;
+    }
+    entry = root.openNextFile();
+  }
+  root.close();
+
+  for (int i = 0; i < fileCount; i++) {
+    if (uploadFile(files[i])) {
+      String newName = files[i] + ".uploaded";
+      SD.rename(files[i], newName);
+      Serial.print(F("[Sentinel] Renamed to: "));
+      Serial.println(newName);
+      anyUploaded = true;
+    }
+  }
+
+  return anyUploaded;
+#else
   return false;
+#endif
 }
 
 bool Sentinel::syncConfig() {
-  // TODO: implement config sync
-  return false;
+  HTTPClient http;
+  String url = api_url + "/api/config/" + device_id;
+
+  http.begin(url);
+  if (api_key.length() > 0)
+    http.addHeader("X-API-Key", api_key);
+
+  int httpCode = http.GET();
+  if (httpCode != 200) {
+    Serial.print(F("[Sentinel] Config sync failed, HTTP "));
+    Serial.println(httpCode);
+    http.end();
+    return false;
+  }
+
+  String payload = http.getString();
+  http.end();
+
+  DynamicJsonDocument doc(512);
+  DeserializationError err = deserializeJson(doc, payload);
+  if (err) {
+    Serial.print(F("[Sentinel] Config JSON error: "));
+    Serial.println(err.f_str());
+    return false;
+  }
+
+  if (doc.containsKey("scan_mode"))
+    config.scan_mode = doc["scan_mode"].as<String>();
+  if (doc.containsKey("phone_home_interval_min"))
+    setPhoneHomeInterval(doc["phone_home_interval_min"].as<uint16_t>());
+  if (doc.containsKey("dead_man_timeout_hrs"))
+    setDeadManTimeout(doc["dead_man_timeout_hrs"].as<uint16_t>());
+  if (doc.containsKey("active"))
+    config.active = doc["active"].as<bool>();
+
+  Serial.println(F("[Sentinel] Config synced"));
+  return true;
 }
 
 bool Sentinel::fetchCommands() {
-  // TODO: implement command fetch
-  return false;
+  HTTPClient http;
+  String url = api_url + "/api/commands/" + device_id;
+
+  http.begin(url);
+  if (api_key.length() > 0)
+    http.addHeader("X-API-Key", api_key);
+
+  int httpCode = http.GET();
+  if (httpCode != 200) {
+    Serial.print(F("[Sentinel] Fetch commands failed, HTTP "));
+    Serial.println(httpCode);
+    http.end();
+    return false;
+  }
+
+  String payload = http.getString();
+  http.end();
+
+  DynamicJsonDocument doc(1024);
+  DeserializationError err = deserializeJson(doc, payload);
+  if (err) {
+    Serial.print(F("[Sentinel] Commands JSON error: "));
+    Serial.println(err.f_str());
+    return false;
+  }
+
+  JsonArray arr = doc.as<JsonArray>();
+  bool anyProcessed = false;
+
+  for (JsonObject obj : arr) {
+    SentinelCommand cmd;
+    cmd.id = obj["id"].as<uint16_t>();
+    cmd.cmd = obj["cmd"].as<String>();
+    cmd.args = obj["args"].as<String>();
+
+    executeCommand(cmd);
+
+    // ACK the command
+    HTTPClient ackHttp;
+    String ackUrl = api_url + "/api/ack";
+    ackHttp.begin(ackUrl);
+    ackHttp.addHeader("Content-Type", "application/json");
+    if (api_key.length() > 0)
+      ackHttp.addHeader("X-API-Key", api_key);
+
+    String ackBody = "{\"device_id\":\"" + device_id + "\",\"command_id\":" + String(cmd.id) + ",\"status\":\"ok\"}";
+    ackHttp.POST(ackBody);
+    ackHttp.end();
+
+    anyProcessed = true;
+  }
+
+  if (anyProcessed)
+    Serial.println(F("[Sentinel] Commands processed"));
+  return anyProcessed;
 }
 
 bool Sentinel::sendHeartbeat() {
-  // TODO: implement heartbeat
+  HTTPClient http;
+  String url = api_url + "/api/heartbeat";
+
+  DynamicJsonDocument doc(512);
+  doc["device_id"] = device_id;
+  doc["device_name"] = device_name;
+  doc["scan_mode"] = config.scan_mode;
+  doc["uptime_sec"] = millis() / 1000;
+  doc["free_heap"] = ESP.getFreeHeap();
+  doc["state"] = getStateStr();
+
+  #ifdef HAS_BATTERY
+    extern BatteryInterface battery_obj;
+    doc["battery_pct"] = battery_obj.getBatteryLevel();
+  #endif
+
+  #ifdef HAS_GPS
+    extern GpsInterface gps_obj;
+    if (gps_obj.getFixStatus()) {
+      doc["lat"] = gps_obj.getLat();
+      doc["lon"] = gps_obj.getLon();
+    }
+  #endif
+
+  String body;
+  serializeJson(doc, body);
+
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  if (api_key.length() > 0)
+    http.addHeader("X-API-Key", api_key);
+
+  int httpCode = http.POST(body);
+  http.end();
+
+  if (httpCode == 200) {
+    Serial.println(F("[Sentinel] Heartbeat sent"));
+    return true;
+  }
+  Serial.print(F("[Sentinel] Heartbeat failed, HTTP "));
+  Serial.println(httpCode);
   return false;
 }
 
 void Sentinel::executeCommand(SentinelCommand& cmd) {
   Serial.print(F("[Sentinel] Execute command: "));
   Serial.println(cmd.cmd);
-  // TODO: implement command execution
+
+  if (cmd.cmd == "reboot") {
+    Serial.println(F("[Sentinel] Rebooting..."));
+    ESP.restart();
+  } else if (cmd.cmd == "clear_sd") {
+#ifdef HAS_SD
+    File root = SD.open("/");
+    if (root) {
+      File entry = root.openNextFile();
+      while (entry) {
+        String name = String("/") + entry.name();
+        entry.close();
+        if (name.endsWith(".log") || name.endsWith(".uploaded") || name.endsWith(".gpx")) {
+          Serial.print(F("[Sentinel] Deleting: "));
+          Serial.println(name);
+          SD.remove(name);
+        }
+        entry = root.openNextFile();
+      }
+      root.close();
+    }
+#endif
+  } else if (cmd.cmd == "wipe") {
+    wipeAll();
+  } else if (cmd.cmd == "switch_mode") {
+    config.scan_mode = cmd.args;
+    Serial.print(F("[Sentinel] Mode switched to: "));
+    Serial.println(cmd.args);
+  } else {
+    Serial.print(F("[Sentinel] Unknown command: "));
+    Serial.println(cmd.cmd);
+  }
 }
 
 // === STATE MACHINE ===
@@ -432,6 +682,7 @@ void Sentinel::main(uint32_t currentTime) {
     }
 
     case SENTINEL_UPLOADING: {
+      sendHeartbeat();
       bool uploaded = uploadAllFiles();
       if (uploaded) {
         Serial.println(F("[Sentinel] Upload complete"));

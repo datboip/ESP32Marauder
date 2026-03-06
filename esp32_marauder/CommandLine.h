@@ -128,6 +128,7 @@ const char PROGMEM AUTOCYCLE_CMD[] = "autocycle";
 const char PROGMEM LISTFILES_CMD[] = "listfiles";
 const char PROGMEM READFILE_CMD[] = "readfile";
 const char PROGMEM WARDRIVEPOI_CMD[] = "wardrivepoi";
+const char PROGMEM SENTINEL_CMD[] = "sentinel";
 
 
 //// Command help messages
@@ -212,6 +213,7 @@ const char PROGMEM HELP_AUTOCYCLE_CMD[] = "autocycle [-s start/stop/status] [-t 
 const char PROGMEM HELP_LISTFILES_CMD[] = "listfiles [directory]";
 const char PROGMEM HELP_READFILE_CMD[] = "readfile <filepath>";
 const char PROGMEM HELP_WARDRIVEPOI_CMD[] = "wardrivepoi [label] - Tag a GPS POI during wardrive";
+const char PROGMEM HELP_SENTINEL_CMD[] = "sentinel [-s start/stop/status] [-i min] [-d hrs] [-n name] [-u url] [-a key] [-w] [-k]";
 const char PROGMEM HELP_FOOT[] = "==================================";
 
 

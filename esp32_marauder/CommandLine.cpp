@@ -1,4 +1,7 @@
 #include "CommandLine.h"
+#include "Sentinel.h"
+
+extern Sentinel sentinel_obj;
 
 // Brightness functions defined in esp32_marauder.ino
 #ifndef HAS_MINI_SCREEN
@@ -298,6 +301,7 @@ void CommandLine::runCommand(String input) {
     #endif
     Serial.println(HELP_BRIGHTNESS_CMD);
     Serial.println(HELP_AUTOCYCLE_CMD);
+    Serial.println(HELP_SENTINEL_CMD);
     #ifdef HAS_SD
       Serial.println(HELP_LISTFILES_CMD);
       Serial.println(HELP_READFILE_CMD);
@@ -1458,6 +1462,53 @@ void CommandLine::runCommand(String input) {
         Serial.println(F("s"));
       } else {
         auto_cycle_obj.printStatus();
+      }
+    }
+
+    // Sentinel command
+    else if (cmd_args.get(0) == SENTINEL_CMD) {
+      int s_arg = this->argSearch(&cmd_args, "-s");
+      int i_arg = this->argSearch(&cmd_args, "-i");
+      int d_arg = this->argSearch(&cmd_args, "-d");
+      int n_arg = this->argSearch(&cmd_args, "-n");
+      int u_arg = this->argSearch(&cmd_args, "-u");
+      int a_arg = this->argSearch(&cmd_args, "-a");
+      int w_arg = this->argSearch(&cmd_args, "-w");
+      int k_arg = this->argSearch(&cmd_args, "-k");
+
+      if (s_arg != -1) {
+        String action = cmd_args.get(s_arg + 1);
+        if (action == "start") sentinel_obj.start();
+        else if (action == "stop") sentinel_obj.stop();
+        else if (action == "status") sentinel_obj.printStatus();
+        else Serial.println(F("Usage: sentinel -s start/stop/status"));
+      } else if (i_arg != -1) {
+        uint16_t min = cmd_args.get(i_arg + 1).toInt();
+        sentinel_obj.setPhoneHomeInterval(min);
+      } else if (d_arg != -1) {
+        uint16_t hrs = cmd_args.get(d_arg + 1).toInt();
+        sentinel_obj.setDeadManTimeout(hrs);
+      } else if (n_arg != -1) {
+        String name = cmd_args.get(n_arg + 1);
+        sentinel_obj.setDeviceName(name);
+      } else if (u_arg != -1) {
+        String url = cmd_args.get(u_arg + 1);
+        sentinel_obj.setApiUrl(url);
+      } else if (a_arg != -1) {
+        String key = cmd_args.get(a_arg + 1);
+        sentinel_obj.setApiKey(key);
+      } else if (w_arg != -1) {
+        sentinel_obj.forcePhoneHome();
+      } else if (k_arg != -1) {
+        Serial.println(F("WARNING: Wiping all sentinel data in 3s..."));
+        delay(3000);
+        sentinel_obj.stop();
+        sentinel_obj.setApiUrl("");
+        sentinel_obj.setApiKey("");
+        sentinel_obj.setDeviceName("");
+        Serial.println(F("Sentinel data wiped."));
+      } else {
+        sentinel_obj.printStatus();
       }
     }
 

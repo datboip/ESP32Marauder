@@ -362,6 +362,24 @@ bool Settings::createDefaultSettings(fs::FS &fs, bool spec, uint8_t index, Strin
     jsonBuffer["Settings"][7]["range"]["min"] = "";
     jsonBuffer["Settings"][7]["range"]["max"] = "";
 
+    jsonBuffer["Settings"][8]["name"] = "DeviceName";
+    jsonBuffer["Settings"][8]["type"] = "String";
+    jsonBuffer["Settings"][8]["value"] = "";
+    jsonBuffer["Settings"][8]["range"]["min"] = "";
+    jsonBuffer["Settings"][8]["range"]["max"] = "";
+
+    jsonBuffer["Settings"][9]["name"] = "ApiUrl";
+    jsonBuffer["Settings"][9]["type"] = "String";
+    jsonBuffer["Settings"][9]["value"] = "";
+    jsonBuffer["Settings"][9]["range"]["min"] = "";
+    jsonBuffer["Settings"][9]["range"]["max"] = "";
+
+    jsonBuffer["Settings"][10]["name"] = "ApiKey";
+    jsonBuffer["Settings"][10]["type"] = "String";
+    jsonBuffer["Settings"][10]["value"] = "";
+    jsonBuffer["Settings"][10]["range"]["min"] = "";
+    jsonBuffer["Settings"][10]["range"]["max"] = "";
+
     //jsonBuffer.printTo(settingsFile);
     if (serializeJson(jsonBuffer, settingsFile) == 0) {
     }
