@@ -19,7 +19,7 @@
 | Release | V6.1 | V6 |
 |---------|------|-----|
 | **[datboip edition](https://github.com/datboip/ESP32Marauder/releases/tag/v1.11.0-datboip)** (recommended) | [v6_1.bin](https://github.com/datboip/ESP32Marauder/releases/download/v1.11.0-datboip/marauder-datboip-v6_1.bin) | [v6.bin](https://github.com/datboip/ESP32Marauder/releases/download/v1.11.0-datboip/marauder-datboip-v6.bin) |
-| **[Night Mode only](https://github.com/datboip/ESP32Marauder/releases/tag/v0.13.1-datboip)** | [v6_1.bin](https://github.com/datboip/ESP32Marauder/releases/download/v0.13.1-datboip/marauder-nightmode-v6_1.bin) | [v6.bin](https://github.com/datboip/ESP32Marauder/releases/download/v0.13.1-datboip/marauder-nightmode-v6.bin) |
+| **[Night mode only](https://github.com/datboip/ESP32Marauder/releases/tag/v0.13.1-datboip)** — upstream + night mode, no other mods | [v6_1.bin](https://github.com/datboip/ESP32Marauder/releases/download/v0.13.1-datboip/marauder-nightmode-v6_1.bin) | [v6.bin](https://github.com/datboip/ESP32Marauder/releases/download/v0.13.1-datboip/marauder-nightmode-v6.bin) |
 
 ## How to Flash
 
@@ -66,7 +66,7 @@ Fullscreen live display with current mode, progress bar, timer, and cycle counte
 - Upstream PR: [#1165](https://github.com/justcallmekoko/ESP32Marauder/pull/1165)
 
 ### Big Touch Zones
-50/50 top/bottom split for easier navigation while driving. No more accidentally hitting the wrong button.
+Menu navigation uses 25% / 50% / 25% layout (Up / Select / Down) instead of stock equal thirds. Larger top and bottom targets for easier tapping while driving.
 
 ### Live POI Tagging
 Tap the bottom bar during wardrive to drop a GPS waypoint. Auto-numbered (POI 1, POI 2, etc.) and saved as GPX. Also via CLI: `wardrivepoi [label]`. *(Merged upstream)*
