@@ -345,8 +345,12 @@ uint8_t drawCyberpunkSplash() {
 #else
   void backlightOn() {
     #ifdef HAS_SCREEN
-      #if defined(MARAUDER_MINI) || defined(MARAUDER_MINI_V3)
+      #if defined(MARAUDER_MINI) || defined(MARAUDER_MINI_V3) && !defined(DUAL_MINI_C5)
         digitalWrite(TFT_BL, LOW);
+      #endif
+
+      #if defined(DUAL_MINI_C5)
+        digitalWrite(TFT_BL, HIGH);
       #endif
     
       #if !defined(MARAUDER_MINI) && !defined(MARAUDER_MINI_V3)
@@ -357,8 +361,12 @@ uint8_t drawCyberpunkSplash() {
 
   void backlightOff() {
     #ifdef HAS_SCREEN
-      #if defined(MARAUDER_MINI) || defined(MARAUDER_MINI_V3)
+      #if defined(MARAUDER_MINI) || defined(MARAUDER_MINI_V3) && !defined(DUAL_MINI_C5)
         digitalWrite(TFT_BL, HIGH);
+      #endif
+
+      #if defined(DUAL_MINI_C5)
+        digitalWrite(TFT_BL, LOW);
       #endif
     
       #if !defined(MARAUDER_MINI) && !defined(MARAUDER_MINI_V3)
