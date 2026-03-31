@@ -1,86 +1,97 @@
-<!---[![License: MIT](https://img.shields.io/github/license/mashape/apistatus.svg)](https://github.com/justcallmekoko/ESP32Marauder/blob/master/LICENSE)--->
-<!---[![Gitter](https://badges.gitter.im/justcallmekoko/ESP32Marauder.png)](https://gitter.im/justcallmekoko/ESP32Marauder)--->
-<!---[![Build Status](https://travis-ci.com/justcallmekoko/ESP32Marauder.svg?branch=master)](https://travis-ci.com/justcallmekoko/ESP32Marauder)--->
-<!---Shields/Badges https://shields.io/--->
+# ESP32 Marauder — datboip edition
 
-# ESP32 Marauder
-<p align="center"><img alt="Marauder logo" src="https://github.com/justcallmekoko/ESP32Marauder/blob/master/pictures/marauder_skull_patch_04_full_final.png?raw=true" width="300"></p>
 <p align="center">
-  <b>A suite of WiFi/Bluetooth offensive and defensive tools for the ESP32</b>
-  <br><br>
-  <a href="https://github.com/justcallmekoko/ESP32Marauder/blob/master/LICENSE"><img alt="License" src="https://img.shields.io/github/license/mashape/apistatus.svg"></a>
-  <a href="https://gitter.im/justcallmekoko/ESP32Marauder"><img alt="Gitter" src="https://badges.gitter.im/justcallmekoko/ESP32Marauder.png"/></a>
-  <a href="https://github.com/justcallmekoko/ESP32Marauder/releases/latest"><img src="https://img.shields.io/github/downloads/justcallmekoko/ESP32Marauder/total" alt="Downloads"/></a>
-  <br>
-  <a href="https://twitter.com/intent/follow?screen_name=jcmkyoutube"><img src="https://img.shields.io/twitter/follow/jcmkyoutube?style=social&logo=twitter" alt="Twitter"></a>
-  <a href="https://www.instagram.com/just.call.me.koko"><img src="https://img.shields.io/badge/Follow%20Me-Instagram-orange" alt="Instagram"/></a>
-  <br><br>
+  <img alt="datboip splash screen" src="pictures/datboip_splash.svg" width="300"/>
 </p>
-    
-[![Build and Push](https://github.com/justcallmekoko/ESP32Marauder/actions/workflows/build_push.yml/badge.svg)](https://github.com/justcallmekoko/ESP32Marauder/actions/workflows/build_push.yml)
+
+<p align="center">
+  <b>Custom wardriving firmware for ESP32 Marauder V6 / V6.1</b>
+  <br>
+  Built on <a href="https://github.com/justcallmekoko/ESP32Marauder">JustCallMeKoko's ESP32 Marauder</a> v1.11.0
+</p>
 
 ---
 
-## datboip edition
+## Downloads
 
-Custom fork of ESP32 Marauder for the V6.1 (LOLIN D32 + ILI9341 touchscreen) with quality-of-life mods for wardriving and daily use. Built on top of [JustCallMeKoko's](https://github.com/justcallmekoko/ESP32Marauder) original firmware.
+> **Flash the correct version for your board.** Check the front of your PCB — if it says V6.1 or V6.2, use the V6.1 bins. If it says V6, use the V6 bins. Flashing the wrong one will break touch/SD.
 
-### What's Different
+| Release | V6.1 | V6 |
+|---------|------|-----|
+| **[datboip edition](https://github.com/datboip/ESP32Marauder/releases/tag/v1.11.0-datboip)** (recommended) | [v6_1.bin](https://github.com/datboip/ESP32Marauder/releases/download/v1.11.0-datboip/marauder-datboip-v6_1.bin) | [v6.bin](https://github.com/datboip/ESP32Marauder/releases/download/v1.11.0-datboip/marauder-datboip-v6.bin) |
+| **[Night Mode only](https://github.com/datboip/ESP32Marauder/releases/tag/v0.13.1-datboip)** | [v6_1.bin](https://github.com/datboip/ESP32Marauder/releases/download/v0.13.1-datboip/marauder-nightmode-v6_1.bin) | [v6.bin](https://github.com/datboip/ESP32Marauder/releases/download/v0.13.1-datboip/marauder-nightmode-v6.bin) |
 
-**Cyberpunk Boot Splash**
-- Animated boot sequence with border draw-in, typewriter title, magenta underline, circuit traces, and accent lines
-- Made for shits and giggles
-- Credits JustCallMeKoko as original author
+## How to Flash
 
-**AutoCycle Mode**
-- Cycles through scan modes automatically: Probe Sniff, Beacon Sniff, AP Scan, Deauth Detect, BLE Scan
-- Fullscreen live status display with current mode, progress bar, timer, step/cycle counters
-- Start from main menu, tap anywhere to stop
-- Also available via CLI: `autocycle -s start/stop/status`
-- Configurable per-mode durations and pause time via CLI
+**SD Card (easiest — no computer needed):**
+1. Download the `.bin` for your board from the table above
+2. Rename it to `update.bin`
+3. Copy to the root of your SD card
+4. On the Marauder: **Device > Update Firmware** > select the file
+5. It flashes and reboots automatically
 
-**PWM Brightness Control**
-- 4-level PWM dimming (25%, 50%, 75%, 100%) instead of binary on/off
-- Saved to flash, persists across reboots
-- Hold top or bottom touch zone for 1.5s to enter brightness mode
-- Also in Device > Brightness menu and CLI: `brightness -c` / `brightness -s 0-3`
-
-**Boot Shortcuts**
-- 4 corner buttons on splash screen: Wardrive, AutoCycle, Station Wardrive, BLE Scan
-- Tap any corner during the 4-second boot splash to jump straight into that mode
-- Just power on and go, no menu navigation needed
-
-**Big Touch Zones**
-- 25% / 50% / 25% layout (Up / Select / Down) instead of equal thirds
-- Bigger top and bottom zones so it's easier to hit while driving
-
-**Fixes for V6.1**
-- Buffer crash when AutoCycle started without SD card (null pointer)
-- Headless mode triggering on every boot (GPIO0 held low by USB reset on V6/V6.1)
-- Backlight not working after flash (PWM init before display init)
-
-### Building
-
+**USB:**
 ```bash
-arduino-cli compile \
-  --fqbn esp32:esp32:d32:PartitionScheme=min_spiffs \
-  --build-property "build.defines=-DMARAUDER_V6_1" \
-  esp32_marauder
-```
-
-### Flashing
-
-```bash
-esptool --port /dev/ttyUSB1 --baud 921600 erase_flash
-esptool --port /dev/ttyUSB1 --baud 921600 write-flash 0x0 build/esp32_marauder.ino.merged.bin
+esptool.py --port /dev/ttyUSB0 --baud 921600 write_flash 0x10000 marauder-datboip-v6_1.bin
 ```
 
 ---
 
-## Getting Started
-Download the [latest release](https://github.com/justcallmekoko/ESP32Marauder/releases/latest) of the firmware.
+## Features
 
-Check out the project [wiki](https://github.com/justcallmekoko/ESP32Marauder/wiki) for a full overview of the ESP32 Marauder
+### Boot Shortcuts
+4 corner tap zones on the splash screen. Tap during the 4-second boot window to jump straight into:
+- **Wardrive** (top-left)
+- **AutoCycle** (top-right)
+- **Station Scan** (bottom-left)
+- **BLE Scan** (bottom-right)
 
-# For Sale Now
-You can buy the ESP32 Marauder using [this link](https://www.justcallmekokollc.com)
+### AutoCycle
+Automatically cycles through scan modes with configurable durations:
+
+Probe Sniff (60s) → Beacon Sniff (45s) → AP Scan (30s) → Deauth Detect (30s) → BLE Scan (45s)
+
+Fullscreen live display with current mode, progress bar, timer, and cycle counter. Also available via CLI: `autocycle -s start/stop/status`
+
+### Night Mode / Brightness
+13-level PWM brightness including ultra-low levels for pitch dark environments:
+- **1%, 3%, 6%** — barely visible, perfect for night wardriving
+- **Enter brightness mode:** Hold top or bottom zone for 2.5s — screen progressively dims as visual feedback
+- **Adjust:** Tap top half = brighter, tap bottom half = dimmer
+- **Blackout:** Hold anywhere for 3s — screen darkens each second then turns off
+- **Wake:** Tap to restore last saved brightness
+- **Quick blackout during scans:** Hold top zone 3s
+- Auto-saves after 4s idle. Persisted to NVS flash across reboots.
+- CLI: `brightness -c` / `brightness -s 0-12`
+- Upstream PR: [#1165](https://github.com/justcallmekoko/ESP32Marauder/pull/1165)
+
+### Big Touch Zones
+50/50 top/bottom split for easier navigation while driving. No more accidentally hitting the wrong button.
+
+### Live POI Tagging
+Tap the bottom bar during wardrive to drop a GPS waypoint. Auto-numbered (POI 1, POI 2, etc.) and saved as GPX. Also via CLI: `wardrivepoi [label]`. *(Merged upstream)*
+
+### Extra CLI Commands
+`autocycle` · `listfiles [dir]` · `readfile <path>` · `brightness` · `wardrivepoi`
+
+---
+
+## Build from Source
+
+```bash
+# Uncomment your board in configs.h (line 16 for V6, line 17 for V6.1), then:
+arduino-cli compile --fqbn esp32:esp32:d32 \
+  --build-property "build.partitions=min_spiffs" \
+  --build-property "upload.maximum_size=1966080" \
+  esp32_marauder/
+
+arduino-cli upload --fqbn esp32:esp32:d32 --port /dev/ttyUSB0 esp32_marauder/
+```
+
+---
+
+## Credits
+
+- [JustCallMeKoko](https://github.com/justcallmekoko) — ESP32 Marauder creator
+- [ESP32 Marauder Wiki](https://github.com/justcallmekoko/ESP32Marauder/wiki) — full documentation
+- [Buy a Marauder](https://www.justcallmekokollc.com) — support the original project
