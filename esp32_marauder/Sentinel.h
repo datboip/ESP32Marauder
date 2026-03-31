@@ -46,6 +46,9 @@ struct SentinelCommand {
 static const uint8_t MAX_NETWORKS = 10;
 static const uint8_t MAX_COMMANDS = 8;
 static const uint16_t UPLOAD_CHUNK_SIZE = 2048;
+static const uint8_t MAX_PIN_LEN = 8;
+static const uint32_t BLE_WAKE_SCAN_INTERVAL_MS = 30000;  // check every 30s
+static const uint32_t BLE_WAKE_SCAN_DURATION_SEC = 3;     // quick 3s scan
 
 class Sentinel {
   private:
@@ -66,6 +69,16 @@ class Sentinel {
     String current_upload_file;
     uint8_t upload_file_index = 0;
 
+    // Lock & stealth
+    bool locked = false;
+    bool stealth_active = false;
+    char pin[MAX_PIN_LEN + 1] = {0};
+    bool pin_enabled = false;
+    String ble_wake_mac;        // trusted BLE MAC for proximity wake
+    String wifi_wake_ssid;      // trusted WiFi SSID for proximity wake
+    uint32_t last_ble_wake_check = 0;
+    bool wake_triggered = false;
+
     void setState(SentinelState newState);
     bool loadNetworks();
     int matchNetwork();
@@ -83,12 +96,23 @@ class Sentinel {
     uint32_t getLastContact();
     String getDeviceMAC();
 
+    // Lock & stealth internals
+    void enterStealth();
+    void exitStealth();
+    void checkProximityWake(uint32_t currentTime);
+    bool bleScanForMAC(const String& targetMAC);
+    bool wifiScanForSSID(const String& targetSSID);
+    bool showPINScreen();
+    void drawPINKeypad(uint8_t entered);
+
   public:
     Sentinel();
     void begin();
     void start();
     void stop();
     bool isEnabled();
+    bool isLocked();
+    bool isStealth();
     SentinelState getState();
     const char* getStateStr();
     void setPhoneHomeInterval(uint16_t minutes);
@@ -96,6 +120,11 @@ class Sentinel {
     void setDeviceName(String name);
     void setApiUrl(String url);
     void setApiKey(String key);
+    void setPIN(const char* newPIN);
+    void clearPIN();
+    void setBLEWakeMAC(const String& mac);
+    void setWiFiWakeSSID(const String& ssid);
+    void unlock();
     void forcePhoneHome();
     void main(uint32_t currentTime);
     void printStatus();

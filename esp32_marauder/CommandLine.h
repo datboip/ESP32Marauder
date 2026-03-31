@@ -206,14 +206,14 @@ const char PROGMEM HELP_BT_SPOOFAT_CMD[] = "spoofat -t <index>";
 const char PROGMEM HELP_BT_WARDRIVE_CMD[] = "btwardrive";
 const char PROGMEM HELP_BT_SKIM_CMD[] = "sniffskim";
 
-const char PROGMEM HELP_BRIGHTNESS_CMD[] = "brightness [-c cycle] [-s <0-9>]";
+const char PROGMEM HELP_BRIGHTNESS_CMD[] = "brightness [-c cycle] [-s <0-12>]";
 
 // AutoCycle + SD
 const char PROGMEM HELP_AUTOCYCLE_CMD[] = "autocycle [-s start/stop/status] [-t <mode_index> <seconds>] [-p <pause_seconds>]";
 const char PROGMEM HELP_LISTFILES_CMD[] = "listfiles [directory]";
 const char PROGMEM HELP_READFILE_CMD[] = "readfile <filepath>";
 const char PROGMEM HELP_WARDRIVEPOI_CMD[] = "wardrivepoi [label] - Tag a GPS POI during wardrive";
-const char PROGMEM HELP_SENTINEL_CMD[] = "sentinel [-s start/stop/status] [-i min] [-d hrs] [-n name] [-u url] [-a key] [-w] [-k]";
+const char PROGMEM HELP_SENTINEL_CMD[] = "sentinel [-s start/stop/status] [-i min] [-d hrs] [-n name] [-u url] [-a key] [-w] [-k] [-p pin/clear] [--ble-key MAC] [--wifi-key SSID] [--unlock pin]";
 const char PROGMEM HELP_FOOT[] = "==================================";
 
 

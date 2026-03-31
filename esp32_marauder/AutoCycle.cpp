@@ -28,6 +28,16 @@ void AutoCycle::loadDefaults() {
   pause_duration = 5;
 }
 
+void AutoCycle::loadRecon() {
+  // Stationary recon: longer scans, no BLE, station scan first
+  num_modes = 4;
+  modes[0] = {AC_SCAN_STATION,   TFT_CYAN,    120, "Station Scan"};
+  modes[1] = {AC_SCAN_PROBE,     TFT_MAGENTA,  90, "Probe Sniff"};
+  modes[2] = {AC_SCAN_AP,        TFT_GREEN,    60, "Beacon Sniff"};
+  modes[3] = {AC_SCAN_WAR_DRIVE, TFT_BLUE,     60, "Wardrive"};
+  pause_duration = 3;
+}
+
 void AutoCycle::start() {
   if (running) return;
   running = true;

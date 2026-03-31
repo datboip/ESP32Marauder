@@ -16,6 +16,8 @@ class WiFiScan;
 #define AC_SCAN_DEAUTH     5
 #define AC_BT_SCAN_ALL    10
 #define AC_SCAN_TARGET_AP 16
+#define AC_SCAN_STATION   26
+#define AC_SCAN_WAR_DRIVE 32
 
 // Scan modes to cycle through
 struct CycleMode {
@@ -59,6 +61,7 @@ class AutoCycle {
     void setPauseDuration(uint16_t sec);
     void setModeDuration(uint8_t index, uint16_t sec);
     void loadDefaults();
+    void loadRecon();
 
     void main(uint32_t currentTime);
     void printStatus();

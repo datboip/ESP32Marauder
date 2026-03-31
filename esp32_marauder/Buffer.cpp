@@ -1,5 +1,10 @@
 #include "Buffer.h"
 #include "lang_var.h"
+#include "SDInterface.h"
+
+#if defined(HAS_SD)
+  extern SDInterface sd_obj;
+#endif
 
 Buffer::Buffer(){
   bufA = (uint8_t*)malloc(BUF_SIZE);
@@ -184,8 +189,18 @@ void Buffer::write(const uint8_t* buf, uint32_t len){
 void Buffer::saveFs(){
   file = fs->open(fileName, FILE_APPEND);
   if (!file) {
-    Serial.println(text02+fileName+"'");
-    return;
+    // SD write failed — try re-init and retry once
+    Serial.println(F("SD write failed, attempting re-init..."));
+    #if defined(HAS_SD)
+      sd_obj.initSD();
+      if (sd_obj.supported) {
+        file = fs->open(fileName, FILE_APPEND);
+      }
+    #endif
+    if (!file) {
+      Serial.println(text02+fileName+"'");
+      return;
+    }
   }
 
   if(useA){

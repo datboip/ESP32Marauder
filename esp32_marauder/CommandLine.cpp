@@ -1372,13 +1372,13 @@ void CommandLine::runCommand(String input) {
           brightnessCycle();
         } else if (s_arg != -1) {
           uint8_t lvl = cmd_args.get(s_arg + 1).toInt();
-          if (lvl < 10) {
+          if (lvl < 13) {
             extern void brightnessSave(uint8_t level);
             brightnessSave(lvl);
             Serial.print(F("[Brightness] Set to level "));
             Serial.println(lvl);
           } else {
-            Serial.println(F("Level must be 0-9"));
+            Serial.println(F("Level must be 0-12"));
           }
         } else {
           Serial.print(F("[Brightness] Current level: "));
@@ -1456,6 +1456,10 @@ void CommandLine::runCommand(String input) {
       int a_arg = this->argSearch(&cmd_args, "-a");
       int w_arg = this->argSearch(&cmd_args, "-w");
       int k_arg = this->argSearch(&cmd_args, "-k");
+      int p_arg = this->argSearch(&cmd_args, "-p");
+      int ble_arg = this->argSearch(&cmd_args, "--ble-key");
+      int wifi_arg = this->argSearch(&cmd_args, "--wifi-key");
+      int unlock_arg = this->argSearch(&cmd_args, "--unlock");
 
       if (s_arg != -1) {
         String action = cmd_args.get(s_arg + 1);
@@ -1478,6 +1482,20 @@ void CommandLine::runCommand(String input) {
       } else if (a_arg != -1) {
         String key = cmd_args.get(a_arg + 1);
         sentinel_obj.setApiKey(key);
+      } else if (p_arg != -1) {
+        String val = cmd_args.get(p_arg + 1);
+        if (val == "clear") sentinel_obj.clearPIN();
+        else sentinel_obj.setPIN(val.c_str());
+      } else if (ble_arg != -1) {
+        String mac = cmd_args.get(ble_arg + 1);
+        sentinel_obj.setBLEWakeMAC(mac);
+      } else if (wifi_arg != -1) {
+        String ssid = cmd_args.get(wifi_arg + 1);
+        sentinel_obj.setWiFiWakeSSID(ssid);
+      } else if (unlock_arg != -1) {
+        String pin = cmd_args.get(unlock_arg + 1);
+        // Serial unlock bypass
+        sentinel_obj.unlock();
       } else if (w_arg != -1) {
         sentinel_obj.forcePhoneHome();
       } else if (k_arg != -1) {
@@ -1487,6 +1505,7 @@ void CommandLine::runCommand(String input) {
         sentinel_obj.setApiUrl("");
         sentinel_obj.setApiKey("");
         sentinel_obj.setDeviceName("");
+        sentinel_obj.clearPIN();
         Serial.println(F("Sentinel data wiped."));
       } else {
         sentinel_obj.printStatus();

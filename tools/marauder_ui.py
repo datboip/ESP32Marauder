@@ -12,6 +12,7 @@ import glob
 import json
 import os
 import queue
+import re
 import sys
 import threading
 import time
@@ -58,6 +59,30 @@ _sse_lock = threading.Lock()
 
 REPORTS_DIR = "./reports"
 
+# ---------------------------------------------------------------------------
+# Monkey-patch marauder_report.read_lines to stream each line to SSE
+# ---------------------------------------------------------------------------
+_original_read_lines = mr.read_lines
+
+def _streaming_read_lines(ser, duration, stop_early=None):
+    """Wrapper that publishes each serial line to SSE as it arrives."""
+    lines = []
+    deadline = time.time() + duration
+    while time.time() < deadline:
+        raw = ser.readline()
+        if raw:
+            line = raw.decode(errors="replace").strip()
+            if line:
+                lines.append(line)
+                # Stream to UI — skip echo lines (start with #)
+                if not line.startswith("#"):
+                    _sse_publish("log", line)
+                if stop_early and re.search(stop_early, line):
+                    break
+    return lines
+
+mr.read_lines = _streaming_read_lines
+
 # Scan type registry: key -> (display_name, scan_function, result_key, default_duration, cli_cmd)
 SCAN_TYPES = {
     "aps":      ("WiFi APs",   mr.scan_aps,      "aps",        15, "scanap"),
@@ -79,7 +104,7 @@ _scan_thread = None
 
 def _sse_publish(event_type, data):
     """Push an event to all SSE listeners."""
-    msg = json.dumps(data) if not isinstance(data, str) else data
+    msg = json.dumps(data)
     with _sse_lock:
         dead = []
         for i, q in enumerate(_sse_queues):
@@ -334,6 +359,193 @@ def api_report_generate():
     })
 
 
+@app.route("/api/analyze", methods=["POST"])
+def api_analyze():
+    """Send scan results to local Ollama for plain-English analysis."""
+    _sse_publish("log", "[*] Sending scan data to Ollama for analysis...")
+
+    with _results_lock:
+        r = dict(_state["results"])
+
+    # OUI vendor lookup for MAC addresses
+    _OUI_DB = {
+        "AC:67:06": "Ruckus", "D8:38:FC": "Ruckus", "74:67:F7": "Ruckus",
+        "70:DF:2F": "Ruckus", "C4:01:7C": "Ruckus", "EC:58:EA": "Ruckus",
+        "B4:79:C8": "Ruckus", "00:25:C4": "Ruckus", "CC:1B:5A": "Ruckus",
+        "A8:BD:27": "Aruba/HPE", "00:0B:86": "Aruba", "24:DE:C6": "Aruba",
+        "6C:F3:7F": "Aruba", "D8:C7:C8": "Aruba", "20:4C:03": "Aruba",
+        "84:23:88": "Aruba", "8C:7A:15": "Aruba", "28:B3:71": "Aruba",
+        "F0:6F:CE": "Aruba", "70:CA:97": "Aruba",
+        "00:40:96": "Cisco", "00:1B:0D": "Cisco", "F4:CF:E2": "Cisco",
+        "00:3A:7D": "Meraki", "00:18:0A": "Meraki", "AC:17:C8": "Meraki",
+        "00:03:52": "Cisco", "50:C7:BF": "TP-Link", "60:32:B1": "TP-Link",
+        "A4:97:33": "eero",
+    }
+    def _oui(mac):
+        return _OUI_DB.get(mac[:8].upper(), "")
+
+    # Build a detailed text summary for security audit
+    summary_parts = []
+
+    # Stats overview
+    n_aps = len(r["aps"])
+    n_open = sum(1 for a in r["aps"] if a.get("auth") in ("[OPEN]", "OPEN", ""))
+    n_bt = len(r["bt_devices"])
+    n_stations = sum(len(s.get("stations", [])) for s in r.get("stations", []))
+    summary_parts.append(f"SCAN SUMMARY: {n_aps} APs ({n_open} OPEN), "
+                         f"{n_stations} station associations, {n_bt} BLE devices")
+
+    if r["aps"]:
+        summary_parts.append("\nWiFi Access Points:")
+        for ap in r["aps"]:
+            vendor = _oui(ap.get("mac", "")) if ap.get("mac") else ""
+            auth = ap.get("auth", "unknown")
+            v_tag = f" [{vendor}]" if vendor else ""
+            open_flag = " **OPEN/UNENCRYPTED**" if auth in ("[OPEN]", "OPEN", "") else ""
+            summary_parts.append(
+                f"  - {ap['essid']} (CH:{ap['channel']}, {ap['rssi']}dBm, "
+                f"Auth:{auth}{v_tag}{open_flag})")
+
+    if r["stations"]:
+        summary_parts.append("\nStation Associations (clients connected to APs):")
+        for ap in r["stations"]:
+            if ap.get("stations"):
+                macs_with_vendor = []
+                for mac in ap["stations"]:
+                    v = _oui(mac)
+                    macs_with_vendor.append(f"{mac} [{v}]" if v else mac)
+                summary_parts.append(
+                    f"  - {ap['essid']} ({ap['rssi']}dBm): "
+                    f"{len(ap['stations'])} clients")
+                for m in macs_with_vendor:
+                    summary_parts.append(f"      {m}")
+
+    if r["probes"] and r["probes"].get("live"):
+        summary_parts.append("\nProbe Requests (devices searching for networks):")
+        for p in r["probes"]["live"]:
+            ssid = p['essid'] or '(broadcast/hidden)'
+            summary_parts.append(
+                f"  - {p['client_mac']} probing for '{ssid}' (CH:{p['channel']})")
+
+    if r["bt_devices"]:
+        summary_parts.append(f"\nBluetooth Devices ({len(r['bt_devices'])}):")
+        for d in r["bt_devices"]:
+            summary_parts.append(f"  - {d['name']} ({d['rssi']}dBm)")
+
+    if r["gps"]:
+        summary_parts.append(
+            f"\nGPS Location: {r['gps'].get('lat','?')}, {r['gps'].get('lon','?')} "
+            f"(Sats:{r['gps'].get('sats','?')}, Alt:{r['gps'].get('alt','?')}m)")
+
+    if r["deauths"]:
+        summary_parts.append(f"\nDeauth Frames: {len(r['deauths'])} captured")
+        for d in r["deauths"]:
+            src_v = _oui(d['source'])
+            src_tag = f" [{src_v}]" if src_v else ""
+            summary_parts.append(
+                f"  - {d['source']}{src_tag} -> {d['dest']} (CH:{d['channel']})")
+
+    if r["eapols"]:
+        summary_parts.append(f"\nEAPOL/PMKID Captures: {len(r['eapols'])}")
+        for e in r["eapols"]:
+            summary_parts.append(f"  - {e['mac']}")
+
+    scan_text = "\n".join(summary_parts)
+    if not scan_text.strip():
+        return jsonify({"ok": False, "error": "No scan data to analyze"})
+
+    # Load audit context file if available
+    audit_context = ""
+    context_path = os.path.join(os.path.dirname(__file__), "audit_context.md")
+    if os.path.exists(context_path):
+        with open(context_path) as f:
+            audit_context = f.read()
+
+    context_block = ""
+    if audit_context:
+        context_block = f"""
+
+PRIOR AUDIT INTELLIGENCE (use this to enrich your analysis — reference specific findings, numbers, and context from this document):
+{audit_context}
+"""
+
+    prompt = f"""You are a wireless penetration tester writing a security assessment. You have scan data from an ESP32 Marauder device AND prior audit intelligence about this facility. Cross-reference the scan data against the audit context to produce a thorough, specific report.
+
+CRITICAL INSTRUCTIONS:
+- Do NOT hallucinate findings. Only report what is actually in the scan data or audit context.
+- If the audit context mentions something not in the scan data, say "per prior audit" when referencing it.
+- Cite exact SSIDs, MACs, auth modes, and vendor OUIs from the data.
+- Rate every finding: CRITICAL / HIGH / MEDIUM / LOW
+
+Your report MUST include:
+
+## 1. Target Identification
+Identify the facility. Map SSIDs to their function using the audit context. Group by: guest-facing, internal operations, third-party/nearby.
+
+## 2. Open Network Exposure (CRITICAL)
+List every OPEN/unencrypted network in the scan data with its SSID, AP count, and purpose. Explain why open WiFi at a casino is especially dangerous (guest credentials, evil twin attacks, passive capture). Reference the Caesar_Resorts and Harrahs_CONFERENCE findings specifically.
+
+## 3. Internal Network Disclosure
+Map each internal SSID to what it reveals about the organization. Highlight the worst exposures: surveillance (SurvDept121), external auditors (che_extaudit), gaming systems (TBLSIGN, DELTA), executive (che_exec). Explain why PSK auth on all internal networks is a finding.
+
+## 4. Infrastructure Analysis
+Identify vendors from OUI prefixes in the MAC addresses. Note any end-of-life hardware (Colubris/00:03:52). Comment on the physical AP count vs virtual BSSID count.
+
+## 5. Active Threats
+Analyze deauth frames and EAPOL captures. Are the source MACs infrastructure or rogue? What does EAPOL capture mean for WPA key security?
+
+## 6. Probe Request Intelligence
+What networks are devices probing for? What does this reveal about internal network names not actively broadcasting?
+
+## 7. Risk Summary Table
+| Finding | Severity | Details |
+Format as a proper table.
+
+## 8. Recommendations
+Specific, actionable steps. Reference WPA3-OWE for guest networks, 802.1X migration for internal, SSID renaming, hardware replacement.
+
+Write in a direct, professional tone. Use markdown. Be specific — cite SSIDs, MACs, auth modes, vendors by name.
+{context_block}
+LIVE SCAN DATA:
+{scan_text}"""
+
+    # Call Ollama API (streaming to avoid timeout on large prompts)
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            "http://localhost:11434/api/generate",
+            data=json.dumps({
+                "model": "llama3",
+                "prompt": prompt,
+                "stream": True,
+            }).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        chunks = []
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            for raw_line in resp:
+                line = raw_line.decode().strip()
+                if not line:
+                    continue
+                chunk = json.loads(line)
+                token = chunk.get("response", "")
+                if token:
+                    chunks.append(token)
+                if chunk.get("done"):
+                    break
+        analysis = "".join(chunks)
+
+        _sse_publish("log", "[+] Ollama analysis complete")
+        return jsonify({"ok": True, "analysis": analysis})
+
+    except urllib.error.URLError:
+        _sse_publish("log", "[!] Ollama not running — start it with: ollama serve")
+        return jsonify({"ok": False, "error": "Cannot connect to Ollama. Is it running? (ollama serve)"}), 503
+    except Exception as e:
+        _sse_publish("log", f"[!] Ollama error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/report/<filename>", methods=["DELETE"])
 def api_report_delete(filename):
     # Safety: only allow report_*.html / report_*.md
@@ -376,6 +588,17 @@ def api_stream():
             "scanning": _state["scanning"],
             "summary": _results_summary(),
         }))
+        # Send welcome log so feed isn't blank
+        summary = _results_summary()
+        has_data = any(v for k, v in summary.items() if k != "gps")
+        if has_data:
+            yield _sse_format("log", json.dumps(
+                f"[*] Scan data loaded — {summary['aps']} APs, "
+                f"{summary['stations']} stations, {summary['bt_devices']} BT devices"))
+        elif not _state["connected"]:
+            yield _sse_format("log", json.dumps(
+                "[*] Ready — connect a device to start scanning"))
+        yield _sse_format("result", json.dumps({"type": "all", "summary": summary}))
         try:
             while True:
                 try:
@@ -702,7 +925,23 @@ def _render_dashboard(auto_port, scan_cards_json):
     <button id="report-btn" class="btn btn-amber" onclick="generateReport()">
         Generate Report
     </button>
+    <button id="analyze-btn" class="btn" onclick="analyzeData()"
+            style="background:#2a1a4a;border-color:#8b5cf6;color:#c4b5fd;">
+        Analyze with AI
+    </button>
     <span id="progress-text" class="progress-text"></span>
+</div>
+
+<!-- AI Analysis Panel (hidden until used) -->
+<div id="analysis-panel" style="display:none;margin-bottom:20px;">
+    <div style="background:var(--bg-card);border:1px solid #8b5cf6;border-radius:8px;padding:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <h3 style="color:#c4b5fd;font-size:1em;">// AI ANALYSIS</h3>
+            <button class="btn" onclick="document.getElementById('analysis-panel').style.display='none'"
+                    style="padding:4px 10px;font-size:0.8em;">Close</button>
+        </div>
+        <div id="analysis-content" style="color:var(--text);line-height:1.7;white-space:pre-wrap;font-size:0.9em;"></div>
+    </div>
 </div>
 
 <!-- Live Feed -->
@@ -890,8 +1129,9 @@ function connectSSE() {{
         if (d.summary) updateBadges(d.summary);
     }});
 
-    evtSource.onerror = function() {{
-        // Will auto-reconnect
+    evtSource.onerror = function(e) {{
+        console.log('SSE error', e);
+        addLog('[*] SSE reconnecting...', 'info');
     }};
 }}
 
@@ -980,6 +1220,32 @@ function generateReport() {{
     }});
 }}
 
+function analyzeData() {{
+    var btn = document.getElementById('analyze-btn');
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+    addLog('[*] Sending data to Ollama for AI analysis...', 'info');
+
+    fetch('/api/analyze', {{method:'POST'}}).then(function(r){{return r.json();}}).then(function(d) {{
+        btn.disabled = false;
+        btn.textContent = 'Analyze with AI';
+        if (d.ok) {{
+            var panel = document.getElementById('analysis-panel');
+            var content = document.getElementById('analysis-content');
+            content.textContent = d.analysis;
+            panel.style.display = 'block';
+            panel.scrollIntoView({{behavior: 'smooth'}});
+            addLog('[+] AI analysis complete — see panel above', 'success');
+        }} else {{
+            addLog('[!] Analysis failed: ' + (d.error||'unknown'), 'error');
+        }}
+    }}).catch(function(e) {{
+        btn.disabled = false;
+        btn.textContent = 'Analyze with AI';
+        addLog('[!] Analysis error: ' + e, 'error');
+    }});
+}}
+
 // Live feed
 function addLog(text, cls) {{
     const log = document.getElementById('feed-log');
@@ -1026,10 +1292,20 @@ setInterval(function() {{
 buildCards();
 document.getElementById('nav-dashboard').classList.add('active');
 
-// Check initial status
+// Always connect SSE on load for live feed
+connectSSE();
+addLog('[*] Dashboard loaded — waiting for events...', 'info');
+
+// Check initial status and populate badges
 fetch('/api/status').then(function(r){{return r.json();}}).then(function(d) {{
     if (d.connected) setConnected(true);
-    if (d.results_summary) updateBadges(d.results_summary);
+    if (d.results_summary) {{
+        updateBadges(d.results_summary);
+        var s = d.results_summary;
+        if (s.aps || s.bt_devices || s.stations) {{
+            addLog('[+] Data loaded: ' + s.aps + ' APs, ' + s.stations + ' stations, ' + s.bt_devices + ' BT devices', 'success');
+        }}
+    }}
 }});
 </script>
 </body>

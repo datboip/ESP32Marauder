@@ -1,11 +1,17 @@
 #include "Sentinel.h"
 #include "WiFiScan.h"
 #include "Buffer.h"
+#include "MenuFunctions.h"
+#include "Display.h"
 
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+
+#ifdef HAS_BT
+  #include <NimBLEDevice.h>
+#endif
 
 #ifdef HAS_SD
   #include "SD.h"
@@ -21,6 +27,14 @@
 
 extern WiFiScan wifi_scan_obj;
 extern Buffer buffer_obj;
+extern MenuFunctions menu_function_obj;
+extern Display display_obj;
+
+// Backlight control from esp32_marauder.ino
+#ifdef HAS_SCREEN
+  extern void backlightOn();
+  extern void backlightOff();
+#endif
 
 // Scan mode constants (must match WiFiScan.h)
 #define SN_SCAN_OFF        0
@@ -47,11 +61,32 @@ void Sentinel::begin() {
     device_name = saved_name;
   }
 
+  // Load PIN
+  String saved_pin = nvs.getString("pin", "");
+  if (saved_pin.length() > 0 && saved_pin.length() <= MAX_PIN_LEN) {
+    strncpy(pin, saved_pin.c_str(), MAX_PIN_LEN);
+    pin[MAX_PIN_LEN] = '\0';
+    pin_enabled = true;
+  }
+
+  // Load wake keys
+  ble_wake_mac = nvs.getString("ble_wake", "");
+  wifi_wake_ssid = nvs.getString("wifi_wake", "");
+
   Serial.println(F("[Sentinel] Initialized"));
   Serial.print(F("[Sentinel] Device ID: "));
   Serial.println(device_id);
   Serial.print(F("[Sentinel] Device Name: "));
   Serial.println(device_name);
+  if (pin_enabled) Serial.println(F("[Sentinel] PIN lock enabled"));
+  if (ble_wake_mac.length() > 0) {
+    Serial.print(F("[Sentinel] BLE wake MAC: "));
+    Serial.println(ble_wake_mac);
+  }
+  if (wifi_wake_ssid.length() > 0) {
+    Serial.print(F("[Sentinel] WiFi wake SSID: "));
+    Serial.println(wifi_wake_ssid);
+  }
 }
 
 String Sentinel::getDeviceMAC() {
@@ -247,6 +282,10 @@ void Sentinel::start() {
   wifi_scan_obj.StartScan(SN_SCAN_WAR_DRIVE, 0x07E0);
 
   setState(SENTINEL_SCANNING);
+
+  // Enter stealth mode (screen off, touch disabled)
+  enterStealth();
+
   Serial.println(F("[Sentinel] Started"));
 }
 
@@ -254,6 +293,8 @@ void Sentinel::stop() {
   if (!enabled) return;
 
   enabled = false;
+  exitStealth();
+  locked = false;
   wifi_scan_obj.StartScan(SN_SCAN_OFF);
   setState(SENTINEL_IDLE);
   Serial.println(F("[Sentinel] Stopped"));
@@ -635,10 +676,339 @@ void Sentinel::executeCommand(SentinelCommand& cmd) {
   }
 }
 
+// === LOCK & STEALTH ===
+
+void Sentinel::setPIN(const char* newPIN) {
+  if (strlen(newPIN) == 0 || strlen(newPIN) > MAX_PIN_LEN) {
+    Serial.println(F("[Sentinel] PIN must be 1-8 digits"));
+    return;
+  }
+  strncpy(pin, newPIN, MAX_PIN_LEN);
+  pin[MAX_PIN_LEN] = '\0';
+  pin_enabled = true;
+  nvs.putString("pin", String(pin));
+  Serial.println(F("[Sentinel] PIN set"));
+}
+
+void Sentinel::clearPIN() {
+  memset(pin, 0, sizeof(pin));
+  pin_enabled = false;
+  nvs.remove("pin");
+  Serial.println(F("[Sentinel] PIN cleared"));
+}
+
+void Sentinel::setBLEWakeMAC(const String& mac) {
+  ble_wake_mac = mac;
+  ble_wake_mac.toUpperCase();
+  nvs.putString("ble_wake", ble_wake_mac);
+  Serial.print(F("[Sentinel] BLE wake MAC: "));
+  Serial.println(ble_wake_mac);
+}
+
+void Sentinel::setWiFiWakeSSID(const String& ssid) {
+  wifi_wake_ssid = ssid;
+  nvs.putString("wifi_wake", wifi_wake_ssid);
+  Serial.print(F("[Sentinel] WiFi wake SSID: "));
+  Serial.println(wifi_wake_ssid);
+}
+
+bool Sentinel::isLocked() {
+  return locked;
+}
+
+bool Sentinel::isStealth() {
+  return stealth_active;
+}
+
+void Sentinel::enterStealth() {
+  if (stealth_active) return;
+  stealth_active = true;
+  locked = true;
+
+  #ifdef HAS_SCREEN
+    backlightOff();
+  #endif
+
+  #ifdef HAS_ILI9341
+    menu_function_obj.disable_touch = true;
+  #endif
+
+  Serial.println(F("[Sentinel] Stealth mode ON"));
+}
+
+void Sentinel::exitStealth() {
+  if (!stealth_active) return;
+  stealth_active = false;
+
+  #ifdef HAS_SCREEN
+    backlightOn();
+  #endif
+
+  #ifdef HAS_ILI9341
+    menu_function_obj.disable_touch = false;
+  #endif
+
+  Serial.println(F("[Sentinel] Stealth mode OFF"));
+}
+
+void Sentinel::unlock() {
+  if (!locked) return;
+
+  if (pin_enabled) {
+    #ifdef HAS_ILI9341
+      // Temporarily enable touch for PIN entry
+      menu_function_obj.disable_touch = false;
+      backlightOn();
+      if (!showPINScreen()) {
+        // Wrong PIN, go back to stealth
+        if (stealth_active) {
+          menu_function_obj.disable_touch = true;
+          backlightOff();
+        }
+        return;
+      }
+    #else
+      Serial.println(F("[Sentinel] No screen for PIN entry, use 'sentinel -unlock <pin>' via serial"));
+      return;
+    #endif
+  }
+
+  locked = false;
+  exitStealth();
+  Serial.println(F("[Sentinel] Unlocked"));
+}
+
+void Sentinel::drawPINKeypad(uint8_t entered) {
+  #ifdef HAS_ILI9341
+    TFT_eSPI& tft = display_obj.tft;
+    const uint16_t W = TFT_WIDTH;
+
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextColor(0x07FF, TFT_BLACK);
+    tft.drawCentreString("ENTER PIN", W / 2, 10, 2);
+
+    // Show dots for entered digits
+    for (uint8_t i = 0; i < MAX_PIN_LEN; i++) {
+      int dotX = W / 2 - (MAX_PIN_LEN * 12) / 2 + i * 12 + 6;
+      if (i < entered)
+        tft.fillCircle(dotX, 40, 4, 0x07FF);
+      else
+        tft.drawCircle(dotX, 4, 4, 0x39E7);
+    }
+
+    // 3x3 grid for digits 1-9, plus 0 and OK
+    const uint8_t btnW = 60;
+    const uint8_t btnH = 40;
+    const uint8_t gap = 8;
+    const uint16_t gridX = (W - 3 * btnW - 2 * gap) / 2;
+    const uint16_t gridY = 60;
+
+    for (int i = 0; i < 9; i++) {
+      int col = i % 3;
+      int row = i / 3;
+      uint16_t bx = gridX + col * (btnW + gap);
+      uint16_t by = gridY + row * (btnH + gap);
+      tft.drawRect(bx, by, btnW, btnH, 0x07FF);
+      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+      tft.drawCentreString(String(i + 1), bx + btnW / 2, by + btnH / 2 - 7, 2);
+    }
+
+    // Bottom row: CLR, 0, OK
+    uint16_t bottomY = gridY + 3 * (btnH + gap);
+    tft.drawRect(gridX, bottomY, btnW, btnH, TFT_RED);
+    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.drawCentreString("CLR", gridX + btnW / 2, bottomY + btnH / 2 - 7, 2);
+
+    tft.drawRect(gridX + btnW + gap, bottomY, btnW, btnH, 0x07FF);
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.drawCentreString("0", gridX + btnW + gap + btnW / 2, bottomY + btnH / 2 - 7, 2);
+
+    tft.drawRect(gridX + 2 * (btnW + gap), bottomY, btnW, btnH, TFT_GREEN);
+    tft.setTextColor(TFT_GREEN, TFT_BLACK);
+    tft.drawCentreString("OK", gridX + 2 * (btnW + gap) + btnW / 2, bottomY + btnH / 2 - 7, 2);
+  #endif
+}
+
+bool Sentinel::showPINScreen() {
+  #ifdef HAS_ILI9341
+    char entered[MAX_PIN_LEN + 1] = {0};
+    uint8_t pos = 0;
+    uint8_t attempts = 0;
+    const uint8_t MAX_ATTEMPTS = 5;
+
+    const uint8_t btnW = 60;
+    const uint8_t btnH = 40;
+    const uint8_t gap = 8;
+    const uint16_t gridX = (TFT_WIDTH - 3 * btnW - 2 * gap) / 2;
+    const uint16_t gridY = 60;
+
+    drawPINKeypad(0);
+
+    while (attempts < MAX_ATTEMPTS) {
+      uint16_t tx, ty;
+      if (display_obj.updateTouch(&tx, &ty)) {
+        // Debounce
+        delay(150);
+        while (display_obj.updateTouch(&tx, &ty)) delay(10);
+
+        // Check which button was pressed
+        int digit = -1;
+        bool clearPressed = false;
+        bool okPressed = false;
+
+        // Check 1-9 grid
+        for (int i = 0; i < 9; i++) {
+          int col = i % 3;
+          int row = i / 3;
+          uint16_t bx = gridX + col * (btnW + gap);
+          uint16_t by = gridY + row * (btnH + gap);
+          if (tx >= bx && tx < bx + btnW && ty >= by && ty < by + btnH) {
+            digit = i + 1;
+            break;
+          }
+        }
+
+        // Check bottom row
+        uint16_t bottomY = gridY + 3 * (btnH + gap);
+        if (ty >= bottomY && ty < bottomY + btnH) {
+          if (tx >= gridX && tx < gridX + btnW) clearPressed = true;
+          else if (tx >= gridX + btnW + gap && tx < gridX + 2 * btnW + gap) digit = 0;
+          else if (tx >= gridX + 2 * (btnW + gap) && tx < gridX + 3 * btnW + 2 * gap) okPressed = true;
+        }
+
+        if (digit >= 0 && pos < MAX_PIN_LEN) {
+          entered[pos++] = '0' + digit;
+          entered[pos] = '\0';
+          drawPINKeypad(pos);
+        } else if (clearPressed) {
+          pos = 0;
+          memset(entered, 0, sizeof(entered));
+          drawPINKeypad(0);
+        } else if (okPressed && pos > 0) {
+          if (strcmp(entered, pin) == 0) {
+            display_obj.tft.fillScreen(TFT_BLACK);
+            display_obj.tft.setTextColor(TFT_GREEN, TFT_BLACK);
+            display_obj.tft.drawCentreString("UNLOCKED", TFT_WIDTH / 2, TFT_HEIGHT / 2 - 7, 2);
+            delay(500);
+            return true;
+          } else {
+            attempts++;
+            pos = 0;
+            memset(entered, 0, sizeof(entered));
+            display_obj.tft.fillScreen(TFT_BLACK);
+            display_obj.tft.setTextColor(TFT_RED, TFT_BLACK);
+            String msg = "WRONG (" + String(MAX_ATTEMPTS - attempts) + " left)";
+            display_obj.tft.drawCentreString(msg, TFT_WIDTH / 2, TFT_HEIGHT / 2 - 7, 2);
+            delay(1000);
+            if (attempts < MAX_ATTEMPTS) drawPINKeypad(0);
+          }
+        }
+      }
+      delay(20);
+    }
+
+    // Max attempts exceeded
+    display_obj.tft.fillScreen(TFT_BLACK);
+    display_obj.tft.setTextColor(TFT_RED, TFT_BLACK);
+    display_obj.tft.drawCentreString("LOCKED OUT", TFT_WIDTH / 2, TFT_HEIGHT / 2 - 7, 2);
+    delay(2000);
+    return false;
+  #else
+    return false;
+  #endif
+}
+
+bool Sentinel::bleScanForMAC(const String& targetMAC) {
+  #ifdef HAS_BT
+    NimBLEDevice::init("");
+    NimBLEScan* pScan = NimBLEDevice::getScan();
+    pScan->setActiveScan(false);
+    pScan->start(BLE_WAKE_SCAN_DURATION_SEC);
+    NimBLEScanResults results = pScan->getResults();
+    bool found = false;
+
+    for (int i = 0; i < results.getCount(); i++) {
+      const NimBLEAdvertisedDevice* dev = results.getDevice(i);
+      String addr = String(dev->getAddress().toString().c_str());
+      addr.toUpperCase();
+      if (addr == targetMAC) {
+        found = true;
+        break;
+      }
+    }
+
+    pScan->clearResults();
+    NimBLEDevice::deinit();
+    return found;
+  #else
+    return false;
+  #endif
+}
+
+bool Sentinel::wifiScanForSSID(const String& targetSSID) {
+  int found = WiFi.scanNetworks(false, false, false, 300);
+  bool matched = false;
+  for (int i = 0; i < found; i++) {
+    if (WiFi.SSID(i) == targetSSID) {
+      matched = true;
+      break;
+    }
+  }
+  WiFi.scanDelete();
+  return matched;
+}
+
+void Sentinel::checkProximityWake(uint32_t currentTime) {
+  if (!stealth_active || !locked) return;
+  if (ble_wake_mac.length() == 0 && wifi_wake_ssid.length() == 0) return;
+
+  if (currentTime - last_ble_wake_check < BLE_WAKE_SCAN_INTERVAL_MS) return;
+  last_ble_wake_check = currentTime;
+
+  bool wakeUp = false;
+
+  // Check BLE proximity (only when not actively WiFi scanning)
+  if (ble_wake_mac.length() > 0 && state == SENTINEL_SCANNING) {
+    // Pause WiFi scan briefly for BLE
+    wifi_scan_obj.StartScan(SN_SCAN_OFF);
+    delay(100);
+    wakeUp = bleScanForMAC(ble_wake_mac);
+    if (!wakeUp) {
+      // Resume wardrive
+      wifi_scan_obj.StartScan(SN_SCAN_WAR_DRIVE, 0x07E0);
+    }
+  }
+
+  // Check WiFi SSID (uses quick WiFi scan — only when paused anyway)
+  if (!wakeUp && wifi_wake_ssid.length() > 0 && state == SENTINEL_SCANNING) {
+    wifi_scan_obj.StartScan(SN_SCAN_OFF);
+    delay(100);
+    wakeUp = wifiScanForSSID(wifi_wake_ssid);
+    if (!wakeUp) {
+      wifi_scan_obj.StartScan(SN_SCAN_WAR_DRIVE, 0x07E0);
+    }
+  }
+
+  if (wakeUp) {
+    Serial.println(F("[Sentinel] Proximity device detected — waking up"));
+    wake_triggered = true;
+    unlock();  // Shows PIN screen if PIN set, otherwise just unlocks
+    // Resume scan after unlock attempt
+    if (stealth_active) {
+      wifi_scan_obj.StartScan(SN_SCAN_WAR_DRIVE, 0x07E0);
+    }
+  }
+}
+
 // === STATE MACHINE ===
 
 void Sentinel::main(uint32_t currentTime) {
   if (!enabled) return;
+
+  // Proximity wake check runs even while scanning
+  if (stealth_active) {
+    checkProximityWake(currentTime);
+  }
 
   switch (state) {
     case SENTINEL_SCANNING: {
@@ -752,6 +1122,20 @@ void Sentinel::printStatus() {
     Serial.print(networks[i].priority);
     Serial.print(F("] "));
     Serial.println(networks[i].ssid);
+  }
+  Serial.print(F("  PIN Lock:   "));
+  Serial.println(pin_enabled ? F("ON") : F("OFF"));
+  Serial.print(F("  Stealth:    "));
+  Serial.println(stealth_active ? F("ON") : F("OFF"));
+  Serial.print(F("  Locked:     "));
+  Serial.println(locked ? F("YES") : F("NO"));
+  if (ble_wake_mac.length() > 0) {
+    Serial.print(F("  BLE Wake:   "));
+    Serial.println(ble_wake_mac);
+  }
+  if (wifi_wake_ssid.length() > 0) {
+    Serial.print(F("  WiFi Wake:  "));
+    Serial.println(wifi_wake_ssid);
   }
 #ifdef HAS_GPS
   Serial.println(F("  GPS:        available"));
