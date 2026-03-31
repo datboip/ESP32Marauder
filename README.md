@@ -14,17 +14,18 @@
 
 ## Downloads
 
-> **Flash the correct version for your board.** Check the front of your PCB — if it says V6.1 or V6.2, use the V6.1 bins. If it says V6, use the V6 bins. Flashing the wrong one will break touch/SD.
+> **Flash the correct version for your board.** Check the front of your PCB — if it says V6.1 or V6.2, use the V6.1 bin. If it says V6, use the V6 bin. Flashing the wrong one will break touch/SD.
 
-| Release | V6.1 | V6 |
-|---------|------|-----|
-| **[datboip edition](https://github.com/datboip/ESP32Marauder/releases/tag/v1.11.0-datboip)** (recommended) | [v6_1.bin](https://github.com/datboip/ESP32Marauder/releases/download/v1.11.0-datboip/marauder-datboip-v6_1.bin) | [v6.bin](https://github.com/datboip/ESP32Marauder/releases/download/v1.11.0-datboip/marauder-datboip-v6.bin) |
-| **[Night mode only](https://github.com/datboip/ESP32Marauder/releases/tag/v0.13.1-datboip)** — upstream + night mode, no other mods | [v6_1.bin](https://github.com/datboip/ESP32Marauder/releases/download/v0.13.1-datboip/marauder-nightmode-v6_1.bin) | [v6.bin](https://github.com/datboip/ESP32Marauder/releases/download/v0.13.1-datboip/marauder-nightmode-v6.bin) |
+| V6.1 | V6 |
+|------|-----|
+| [marauder-datboip-v6_1.bin](https://github.com/datboip/ESP32Marauder/releases/download/v1.11.0-datboip/marauder-datboip-v6_1.bin) | [marauder-datboip-v6.bin](https://github.com/datboip/ESP32Marauder/releases/download/v1.11.0-datboip/marauder-datboip-v6.bin) |
+
+[All releases](https://github.com/datboip/ESP32Marauder/releases)
 
 ## How to Flash
 
 **SD Card (easiest — no computer needed):**
-1. Download the `.bin` for your board from the table above
+1. Download the `.bin` for your board
 2. Rename it to `update.bin`
 3. Copy to the root of your SD card
 4. On the Marauder: **Device > Update Firmware** > select the file
@@ -37,7 +38,9 @@ esptool.py --port /dev/ttyUSB0 --baud 921600 write_flash 0x10000 marauder-datboi
 
 ---
 
-## Features
+## What's Different from Stock
+
+Everything in stock Marauder, plus:
 
 ### Boot Shortcuts
 4 corner tap zones on the splash screen. Tap during the 4-second boot window to jump straight into:
@@ -51,28 +54,23 @@ Automatically cycles through scan modes with configurable durations:
 
 Probe Sniff (60s) → Beacon Sniff (45s) → AP Scan (30s) → Deauth Detect (30s) → BLE Scan (45s)
 
-Fullscreen live display with current mode, progress bar, timer, and cycle counter. Also available via CLI: `autocycle -s start/stop/status`
-
-### Night Mode / Brightness
-13-level PWM brightness including ultra-low levels for pitch dark environments:
-- **1%, 3%, 6%** — barely visible, perfect for night wardriving
-- **Enter brightness mode:** Hold top or bottom zone for 2.5s — screen progressively dims as visual feedback
-- **Adjust:** Tap top half = brighter, tap bottom half = dimmer
-- **Blackout:** Hold anywhere for 3s — screen darkens each second then turns off
-- **Wake:** Tap to restore last saved brightness
-- **Quick blackout during scans:** Hold top zone 3s
-- Auto-saves after 4s idle. Persisted to NVS flash across reboots.
-- CLI: `brightness -c` / `brightness -s 0-12`
-- Upstream PR: [#1165](https://github.com/justcallmekoko/ESP32Marauder/pull/1165)
+Fullscreen live display with current mode, progress bar, timer, and cycle counter. CLI: `autocycle -s start/stop/status`
 
 ### Big Touch Zones
 Menu navigation uses 25% / 50% / 25% layout (Up / Select / Down) instead of stock equal thirds. Larger top and bottom targets for easier tapping while driving.
 
-### Live POI Tagging
-Tap the bottom bar during wardrive to drop a GPS waypoint. Auto-numbered (POI 1, POI 2, etc.) and saved as GPX. Also via CLI: `wardrivepoi [label]`. *(Merged upstream)*
-
 ### Extra CLI Commands
-`autocycle` · `listfiles [dir]` · `readfile <path>` · `brightness` · `wardrivepoi`
+`autocycle` · `listfiles [dir]` · `readfile <path>` · `brightness`
+
+---
+
+## Upstream Contributions
+
+These features were developed here and merged into the main ESP32 Marauder project:
+
+- **[PWM Brightness](https://github.com/justcallmekoko/ESP32Marauder/pull/1142)** — 13-level dimming, NVS persisted
+- **[Wardrive POI Tagging](https://github.com/justcallmekoko/ESP32Marauder/pull/1166)** — tap to drop GPS waypoints during wardrive
+- **[Night Mode / Blackout](https://github.com/justcallmekoko/ESP32Marauder/pull/1165)** — hold-to-blackout with progressive dimming, ultra-low brightness levels *(pending merge)*
 
 ---
 
