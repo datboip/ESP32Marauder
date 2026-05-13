@@ -22,6 +22,21 @@ class Settings {
   private:
     String json_settings_string;
 
+    // Flat cache populated once at begin() and kept in sync by saveSetting().
+    // All loadSetting<T>() reads hit this struct — zero heap, zero JSON parse.
+    struct SettingsCache {
+      bool  ForcePMKID  = false;
+      bool  ForceProbe  = false;
+      bool  SavePCAP    = true;
+      bool  EnableLED   = true;
+      bool  EPDeauth    = false;
+      bool  ChanHop     = false;
+      String ClientSSID = "";
+      String ClientPW   = "";
+    } _cache;
+
+    void _buildCache();  // parse json_settings_string -> _cache
+
   public:
     bool begin();
 
@@ -35,7 +50,7 @@ class Settings {
     T saveSetting(String key, String value);
 
     bool toggleSetting(String key);
-    String getSettingType(String key);
+    const char* getSettingType(const char* key);
     String setting_index_to_name(int i);
     int getNumberSettings();
 

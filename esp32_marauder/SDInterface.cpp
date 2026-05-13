@@ -21,7 +21,7 @@ bool SDInterface::initSD() {
     pinMode(SD_CS, OUTPUT);
 
     delay(10);
-    #if (defined(MARAUDER_M5STICKC)) || (defined(HAS_CYD_TOUCH)) || (defined(MARAUDER_CARDPUTER))
+    #if (defined(MARAUDER_M5STICKC)) || (defined(HAS_CYD_TOUCH)) || (defined(MARAUDER_CARDPUTER)) || (defined(MARAUDER_CARDPUTER_ADV))
       /* Set up SPI SD Card using external pin header
       StickCPlus Header - SPI SD Card Reader
                   3v3   -   3v3
@@ -33,12 +33,12 @@ bool SDInterface::initSD() {
       */
       #if defined(MARAUDER_M5STICKC)
         enum { SPI_SCK = 0, SPI_MISO = 36, SPI_MOSI = 26 };
-      #elif defined(HAS_CYD_TOUCH) || defined(MARAUDER_CARDPUTER) || defined(HAS_SEPARATE_SD)
+      #elif defined(HAS_CYD_TOUCH) || defined(MARAUDER_CARDPUTER) || defined(MARAUDER_CARDPUTER_ADV) || defined(HAS_SEPARATE_SD)
         enum { SPI_SCK = SD_SCK, SPI_MISO = SD_MISO, SPI_MOSI = SD_MOSI };
       #else
         enum { SPI_SCK = 0, SPI_MISO = 36, SPI_MOSI = 26 };
       #endif
-      #ifndef MARAUDER_CARDPUTER
+      #if !defined(MARAUDER_CARDPUTER) && !defined(MARAUDER_CARDPUTER_ADV)
         this->spiExt = new SPIClass();
       #else
         this->spiExt = new SPIClass(FSPI);
@@ -47,7 +47,6 @@ bool SDInterface::initSD() {
       this->spiExt->begin(SPI_SCK, SPI_MISO, SPI_MOSI, SD_CS);
       if (!SD.begin(SD_CS, *(this->spiExt))) {
     #elif defined(HAS_C5_SD)
-      Serial.println(F("Using C5 SD configuration..."));
       if (!SD.begin(SD_CS, *_spi)) {
     #else
       if (!SD.begin(SD_CS)) {
@@ -83,8 +82,6 @@ bool SDInterface::initSD() {
       }
 
       this->sd_files = new LinkedList<String>();
-
-      //this->sd_files->add("Back");
     
       return true;
   }
@@ -222,10 +219,7 @@ void SDInterface::runUpdate(String file_name) {
     const esp_partition_t *next = esp_ota_get_next_update_partition(NULL);
 
     esp_err_t result = esp_ota_set_boot_partition(next);
-
-    Serial.println(F("rebooting..."));
-    //SD.remove("/update.bin");      
-    delay(1000);
+     
     ESP.restart();
   }
   else {
@@ -266,12 +260,8 @@ void SDInterface::performUpdate(Stream &updateSource, size_t updateSize) {
       Serial.println(F(". Retry?"));
     }
     if (Update.end()) {
-      Serial.println(F("OTA done!"));
       if (Update.isFinished()) {
-        #ifdef HAS_SCREEN
-          display_obj.tft.println(F(text_table2[11]));
-        #endif
-        Serial.println(F("Update successfully completed. Rebooting."));
+
       }
       else {
         #ifdef HAS_SCREEN

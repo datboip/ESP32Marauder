@@ -345,12 +345,8 @@ uint8_t drawCyberpunkSplash() {
 #else
   void backlightOn() {
     #ifdef HAS_SCREEN
-      #if defined(MARAUDER_MINI) || defined(MARAUDER_MINI_V3) && !defined(DUAL_MINI_C5)
+      #if defined(MARAUDER_MINI) || defined(MARAUDER_MINI_V3)
         digitalWrite(TFT_BL, LOW);
-      #endif
-
-      #if defined(DUAL_MINI_C5)
-        digitalWrite(TFT_BL, HIGH);
       #endif
     
       #if !defined(MARAUDER_MINI) && !defined(MARAUDER_MINI_V3)
@@ -361,12 +357,8 @@ uint8_t drawCyberpunkSplash() {
 
   void backlightOff() {
     #ifdef HAS_SCREEN
-      #if defined(MARAUDER_MINI) || defined(MARAUDER_MINI_V3) && !defined(DUAL_MINI_C5)
+      #if defined(MARAUDER_MINI) || defined(MARAUDER_MINI_V3)
         digitalWrite(TFT_BL, HIGH);
-      #endif
-
-      #if defined(DUAL_MINI_C5)
-        digitalWrite(TFT_BL, LOW);
       #endif
     
       #if !defined(MARAUDER_MINI) && !defined(MARAUDER_MINI_V3)
@@ -472,7 +464,7 @@ void setup()
 
   uint8_t boot_shortcut = 0;
   #ifdef HAS_SCREEN
-    #ifndef MARAUDER_CARDPUTER
+    #if !defined(MARAUDER_CARDPUTER) && !defined(MARAUDER_CARDPUTER_ADV)
       boot_shortcut = drawCyberpunkSplash();
     #else
       display_obj.tft.drawCentreString("ESP32 Marauder", TFT_HEIGHT/2, TFT_WIDTH * 0.20, 1);
@@ -500,7 +492,9 @@ void setup()
 
   settings_obj.begin();
 
-  if (settings_obj.getSettingType("ChanHop") == "") {
+  const char* type = settings_obj.getSettingType("ChanHop");
+
+  if (type == nullptr || type[0] == '\0') {
     Serial.println(F("Current settings format not supported. Installing new default settings..."));
     settings_obj.createDefaultSettings(SPIFFS);
   }
@@ -548,6 +542,9 @@ void setup()
   #endif
 
   #ifdef HAS_SCREEN
+    #if defined(MARAUDER_CARDPUTER) || defined(MARAUDER_CARDPUTER_ADV)
+      display_obj.clearScreen();
+    #endif
     menu_function_obj.RunSetup();
   #endif
 
